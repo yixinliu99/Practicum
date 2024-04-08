@@ -56,25 +56,39 @@ aptb = ActionProviderBlueprint(
 
 
 @aptb.action_run
-def my_action_run(action_request: ActionRequest, auth: AuthState):
-    pass
+def my_action_run(
+        action_request: ActionRequest, auth: AuthState
+) -> ActionCallbackReturn:
+    """
+    Implement custom business logic related to instantiating an Action here.
+    Once launched, collect details on the Action and create an ActionStatus
+    which records information on the instantiated Action and gets stored.
+    """
+    action_status = ActionStatus(
+        status=ActionStatusValue.ACTIVE,
+        creator_id=str(auth.effective_identity),
+        label=action_request.label or None,
+        monitor_by=action_request.monitor_by or auth.identities,
+        manage_by=action_request.manage_by or auth.identities,
+        start_time=datetime.now(timezone.utc).isoformat(),
+        completion_time=None,
+        release_after=action_request.release_after or "P30D",
+        display_status=ActionStatusValue.ACTIVE,
+        details={},
+    )
+    simple_backend[action_status.action_id] = action_status
+    return action_status
 
 
 @aptb.action_status
-def my_action_status(action_id: str, auth: AuthState):
-    pass
-
-
-@aptb.action_cancel
-def my_action_cancel(action_id: str, auth: AuthState):
-    pass
-
-
-@aptb.action_release
-def my_action_release(action_id: str, auth: AuthState):
-    pass
-
-
-@aptb.action_log
-def my_action_log(action_id: str, auth: AuthState):
-    pass
+def my_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+    """
+    Query for the action_id in some storage backend to return the up-to-date
+    ActionStatus. It's possible that some ActionProviders will require querying
+    an external system to get up to date information on an Action's status.
+    """
+    action_status = simple_backend.get(action_id)
+    if action_status is None:
+        raise ActionNotFound(f"No action with {action_id}")
+    authorize_action_access_or_404(action_status, auth)
+    return action_status
