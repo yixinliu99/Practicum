@@ -30,3 +30,22 @@ def transfer_objects(source_bucket, destination_bucket, action_id):
                               Item={'action_id': {'S': action_id}, 'object_id': {'S': obj['Key']}})
 
     return True
+
+
+
+
+def set_bucket_object_thawed_notification(bucket_name, lambda_arn):
+    s3 = boto3.client('s3')
+    s3.put_bucket_notification_configuration(
+        Bucket=bucket_name,
+        NotificationConfiguration={
+            'LambdaFunctionConfigurations': [
+                {
+                    'LambdaFunctionArn': lambda_arn,
+                    'Events': [
+                        's3:ObjectRestore:Completed'
+                    ]
+                },
+            ]
+        }
+    )
