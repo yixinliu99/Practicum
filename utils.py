@@ -8,21 +8,25 @@ def get_objects(bucket_name):
     return response
 
 
-# transfer objects that are of class standard storage class; thaw those that are of class deep archive storage class
-def transfer_objects(source_bucket, destination_bucket):
+# transfer objects that are of class standard storage class; thaw those that are of class deep archive storage class.
+# After restore_object is called, add action_id and object_ids to dynamodb table
+def transfer_objects(source_bucket, destination_bucket, action_id):
     s3 = boto3.client('s3')
+    dynamodb = boto3.client('dynamodb')
     response = s3.list_objects_v2(Bucket=source_bucket)
     for obj in response['Contents']:
         obj_class = s3.get_object_storage_class(Bucket=source_bucket, Key=obj['Key'])
-        if obj_class != 'GLACIER' and obj_class != 'DEEP_ARCHIVE' and obj_class != 'INTELLIGENT_TIERING': # todo INTELLIGENT_TIERING
+        if obj_class != 'GLACIER' and obj_class != 'DEEP_ARCHIVE' and obj_class != 'INTELLIGENT_TIERING':  # todo INTELLIGENT_TIERING
             try:
                 s3.copy_object(Bucket=destination_bucket, CopySource={'Bucket': source_bucket, 'Key': obj['Key']},
                                Key=obj['Key'])
             except Exception as e:
                 print(e)
-                return False # todo
+                return False  # todo
             s3.delete_object(Bucket=source_bucket, Key=obj['Key'])
         else:
             s3.restore_object(Bucket=source_bucket, Key=obj['Key'], RestoreRequest={'Days': 1})
+            dynamodb.put_item(TableName='RestoreObjects', #todo create table
+                              Item={'action_id': {'S': action_id}, 'object_id': {'S': obj['Key']}})
 
     return True
