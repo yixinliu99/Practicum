@@ -1,2 +1,3 @@
 Flask
 globus-action-provider-tools
+boto3
