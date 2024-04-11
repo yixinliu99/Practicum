@@ -33,9 +33,9 @@ class ActionProviderInput(BaseModel):
 
 
 description = ActionProviderDescription(
-    globus_auth_scope="https://auth.globus.org/scopes/d3a66776-759f-4316-ba55-21725fe37323/action_all",
+    globus_auth_scope="https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all",
     title="What Time Is It Right Now?",
-    admin_contact="support@whattimeisrightnow.example",
+    admin_contact="yixinliu@uchicago.edu",
     synchronous=True,
     input_schema=ActionProviderInput,
     api_version="1.0",
