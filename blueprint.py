@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Dict, List, Set
+import utils
 
 from flask import request
 from pydantic import BaseModel, Field
@@ -34,17 +35,17 @@ class ActionProviderInput(BaseModel):
 
 description = ActionProviderDescription(
     globus_auth_scope="https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all",
-    title="What Time Is It Right Now?",
+    title="Thaw files",
     admin_contact="yixinliu@uchicago.edu",
     synchronous=True,
     input_schema=ActionProviderInput,
     api_version="1.0",
-    subtitle="Another exciting promotional tie-in for whattimeisitrightnow.com",
+    subtitle="",
     description="",
-    keywords=["time", "whattimeisitnow", "productivity"],
+    keywords=[],
     visible_to=["public"],
     runnable_by=["all_authenticated_users"],
-    administered_by=["support@whattimeisrightnow.example"],
+    administered_by=["yixinliu@uchicago.edu"],
 )
 
 aptb = ActionProviderBlueprint(
@@ -76,19 +77,20 @@ def my_action_run(
         display_status=ActionStatusValue.ACTIVE,
         details={},
     )
-    simple_backend[action_status.action_id] = action_status
+    # simple_backend[action_status.action_id] = action_status
+    print(action_request)
     return action_status
 
 
-@aptb.action_status
-def my_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
-    """
-    Query for the action_id in some storage backend to return the up-to-date
-    ActionStatus. It's possible that some ActionProviders will require querying
-    an external system to get up to date information on an Action's status.
-    """
-    action_status = simple_backend.get(action_id)
-    if action_status is None:
-        raise ActionNotFound(f"No action with {action_id}")
-    authorize_action_access_or_404(action_status, auth)
-    return action_status
+# @aptb.action_status
+# def my_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+#     """
+#     Query for the action_id in some storage backend to return the up-to-date
+#     ActionStatus. It's possible that some ActionProviders will require querying
+#     an external system to get up to date information on an Action's status.
+#     """
+#     action_status = simple_backend.get(action_id)
+#     if action_status is None:
+#         raise ActionNotFound(f"No action with {action_id}")
+#     authorize_action_access_or_404(action_status, auth)
+#     return action_status
