@@ -51,7 +51,7 @@ aptb = ActionProviderBlueprint(
 
 
 @aptb.action_run
-def my_action_run(
+def thaw_action_run(
         action_request: ActionRequest, auth: AuthState
 ) -> ActionCallbackReturn:
     """
@@ -71,12 +71,12 @@ def my_action_run(
         display_status=ActionStatusValue.ACTIVE,
         details={},
     )
-    # simple_backend[action_status.action_id] = action_status
+    utils.thaw_objects(action_request.body['items'], action_status.action_id)
     return action_status
 
 
 @aptb.action_status
-def my_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     """
     Query for the action_id in some storage backend to return the up-to-date
     ActionStatus. It's possible that some ActionProviders will require querying
