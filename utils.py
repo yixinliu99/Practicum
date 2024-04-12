@@ -10,9 +10,10 @@ def get_objects(bucket_name):
 
 def thaw_objects(complete_path, action_id):
     s3 = boto3.client('s3')
-    dynamodb = boto3.client('dynamodb')
+    dynamodb = boto3.client('dynamodb', region_name='us-east-1')
     source_bucket = complete_path.split('/')[0]
     prefix = '/'.join(complete_path.split('/')[1:])
+    print(complete_path)
     print(source_bucket)
     response = s3.list_objects_v2(Bucket=source_bucket)
     for obj in response['Contents']:
@@ -44,3 +45,6 @@ def set_bucket_object_thawed_notification(bucket_name, lambda_arn):
             ]
         }
     )
+
+if __name__ == "__main__":
+    print(thaw_objects('mpcs-practicum/testdata', '1'))
