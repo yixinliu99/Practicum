@@ -49,7 +49,7 @@ description = ActionProviderDescription(
 )
 
 aptb = ActionProviderBlueprint(
-    name="thaw",
+    name="apt",
     import_name=__name__,
     url_prefix="/thaw",
     provider_description=description,
