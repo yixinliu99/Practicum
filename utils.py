@@ -16,6 +16,7 @@ def thaw_objects(complete_path, action_id):
     print(complete_path)
     print(source_bucket)
     response = s3.list_objects_v2(Bucket=source_bucket)
+    print(response)
     for obj in response['Contents']:
         obj_class = s3.get_object_storage_class(Bucket=source_bucket, Key=obj['Key'])
         if obj_class == 'GLACIER' or obj_class == 'DEEP_ARCHIVE' or obj_class == 'INTELLIGENT_TIERING':
