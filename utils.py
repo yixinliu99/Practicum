@@ -12,9 +12,10 @@ def thaw_objects(complete_path, action_id):
     s3 = boto3.client('s3')
     dynamodb = boto3.client('dynamodb', region_name='us-east-1')
     source_bucket = complete_path.split('/')[0]
-    prefix = '/'.join(complete_path.split('/')[1:])
+    name = '/'.join(complete_path.split('/')[1:])
     print(complete_path)
     print(source_bucket)
+    print(name)
     response = s3.list_objects_v2(Bucket=source_bucket)
     print(response)
     for obj in response['Contents']:
