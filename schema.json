@@ -1,56 +1,68 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "additionalProperties": false,
-  "properties": {
-    "endpoint_id": {
-      "format": "uuid",
-      "maxLength": 36,
-      "minLength": 36,
-      "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
-      "type": "string"
-    },
-    "ignore_missing": {
-      "default": false,
-      "description": "Don't generate errors for nonexistent files and directories.",
-      "type": "boolean"
-    },
-    "interpret_globs": {
-      "default": false,
-      "description": "When set, shell glob characters '*?[]' in the last path component are interpreted as a pattern. This also enables backslash escapes for literal uses of these characters and the backslash character. Like *NIX operating systems, glob characters will not match files or directories that start with '.', and a literal '.' character is required in such cases. The special directories entries '.' and '..' are never matched. Symlinks found during glob expansion are deleted and never followed.",
-      "type": "boolean"
-    },
-    "items": {
-      "items": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+      "deadline": {
+        "description": "A deadline by which the Transfer task much complete or else it will be terminated by Globus Transfer",
+        "format": "date-time",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "delete_destination_extra": {
+        "default": false,
+        "description": "Delete files, directories, and symlinks on the destination endpoint which don’t exist on the source endpoint or are a different type. Only applies for recursive directory transfers.",
+        "type": "boolean"
+      },
+      "destinationEndpoint": {
+        "description": "The uuid for the endpoint which serves as the destination for the Transfer",
+        "format": "uuid",
+        "maxLength": 36,
+        "minLength": 36,
+        "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
         "type": "string"
       },
-      "type": "array"
-    },
-    "label": {
-      "maxLength": 128,
-      "minLength": 1,
-      "pattern": "^[a-zA-Z0-9-_, ]+$",
-      "type": "string"
-    },
-    "notify_on_failed": {
-      "description": "If true and the user has notification enabled, send a notification email when the thaw completes with status FAILED. If unspecified, no value is sent to the Transfer API and the Transfer API will apply its own default.",
-      "type": "boolean"
-    },
-    "notify_on_inactive": {
-      "description": "If true and the user has notification enabled, send a notification email when the thaw enters status INACTIVE, e.g. from activation credentials expiring. If unspecified, no value is sent to the Transfer API and the Transfer API will apply its own default.",
-      "type": "boolean"
-    },
-    "notify_on_succeeded": {
-      "description": "If true and the user has notification enabled, send a notification email when the thaw completes with status SUCCEEDED. If unspecified, no value is sent to the Transfer API and the Transfer API will apply its own default.",
-      "type": "boolean"
-    },
-    "recursive": {
-      "default": false,
-      "type": "boolean"
-    }
-  },
-  "required": [
-    "endpoint_id",
-    "items"
-  ],
-  "type": "object"
-}
+      "encrypt_data": {
+        "default": false,
+        "description": "Whether Transfer should encrypt data sent through the network using TLS",
+        "type": "boolean"
+      },
+      "fail_on_quota_errors": {
+        "default": false,
+        "description": "Cancel the task if QUOTA_EXCEEDED errors are hit.",
+        "type": "boolean"
+      },
+      "filterRule": {
+        "additionalProperties": false,
+        "properties": {
+          "DATA_TYPE": {
+            "description": "Optional, but must be 'filter_rule' if present.",
+            "enum": [
+              "filter_rule"
+            ]
+          },
+          "method": {
+            "description": "Either \"include\" or \"exclude\". Each item found during recursive directory traversal is matched against the filter rules in the order the rules are listed, and the first matching rule is applied. e.g. 'include /foo/bar, exclude /foo' will include /foo/bar and exclude everything else in /foo",
+            "enum": [
+              "exclude",
+              "include"
+            ]
+          },
+          "name": {
+            "description": "A pattern to match against the item name. This field is currently required for all filter rules. Unix style wildcards are supported. * matches everything. ? matches any single character. [] matches any singe character within the brackets. [!] matches any single character not within the brackets.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Either \"file\" or \"dir\". If left as null or not given, this filter rule will apply to all item types, otherwise it will only apply to the specified type.",
+            "enum": [
+              "file",
+              "dir"
+            ]
+          }
+        },
+        "required": [
+          "method",
+          "name"
+        ],
+        "type": "object"
+      },
