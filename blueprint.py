@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 from typing import Dict, List, Set
 import utils
+import json
 
 from flask import request
-from pydantic import BaseModel, Field
 
 from globus_action_provider_tools import (
     ActionProviderDescription,
@@ -24,13 +24,7 @@ from globus_action_provider_tools.flask.types import (
 )
 
 
-class ActionProviderInput(BaseModel):
-    utc_offset: int = Field(
-        ..., title="UTC Offset", description="An input value to this ActionProvider"
-    )
-
-    class Config:
-        schema_extra = {"example": {"utc_offset": 10}}
+schema = json.load(open('schema.json', 'r'))
 
 
 description = ActionProviderDescription(
@@ -38,7 +32,7 @@ description = ActionProviderDescription(
     title="Thaw files",
     admin_contact="yixinliu@uchicago.edu",
     synchronous=True,
-    input_schema=ActionProviderInput,
+    input_schema=schema,
     api_version="1.0",
     subtitle="",
     description="",
