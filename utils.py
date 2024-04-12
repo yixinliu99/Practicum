@@ -1,5 +1,9 @@
 import boto3
 
+GLACIER = 'GLACIER'
+DEEP_ARCHIVE = 'DEEP_ARCHIVE'
+INTELLIGENT_TIERING = 'INTELLIGENT_TIERING'
+ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
 
 def get_objects(bucket_name):
     s3 = boto3.client('s3')
@@ -16,11 +20,14 @@ def thaw_objects(complete_path, action_id):
     print(complete_path)
     print(source_bucket)
     print(name)
-    response = s3.list_objects_v2(Bucket=source_bucket)
+    response = s3.list_objects_v2(Bucket=source_bucket) # todo: pagination (1k items)
     print(response)
     for obj in response['Contents']:
-        obj_class = s3.get_object_storage_class(Bucket=source_bucket, Key=obj['Key'])
-        if obj_class == 'GLACIER' or obj_class == 'DEEP_ARCHIVE' or obj_class == 'INTELLIGENT_TIERING':
+        if not obj['Key'].startswith(name):
+            continue
+
+        obj_class = obj['StorageClass']
+        if obj_class in ARCHIVE_CLASSES:
             try:
                 s3.restore_object(Bucket=source_bucket, Key=obj['Key'], RestoreRequest={'Days': 1})
                 dynamodb.put_item(TableName='MPCS-Practicum-2024',
