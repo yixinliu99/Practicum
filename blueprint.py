@@ -72,19 +72,18 @@ def my_action_run(
         details={},
     )
     # simple_backend[action_status.action_id] = action_status
-    print(action_request)
     return action_status
 
 
-# @aptb.action_status
-# def my_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
-#     """
-#     Query for the action_id in some storage backend to return the up-to-date
-#     ActionStatus. It's possible that some ActionProviders will require querying
-#     an external system to get up to date information on an Action's status.
-#     """
-#     action_status = simple_backend.get(action_id)
-#     if action_status is None:
-#         raise ActionNotFound(f"No action with {action_id}")
-#     authorize_action_access_or_404(action_status, auth)
-#     return action_status
+@aptb.action_status
+def my_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+    """
+    Query for the action_id in some storage backend to return the up-to-date
+    ActionStatus. It's possible that some ActionProviders will require querying
+    an external system to get up to date information on an Action's status.
+    """
+    action_status = True
+    if action_status is None:
+        raise ActionNotFound(f"No action with {action_id}")
+    authorize_action_access_or_404(action_status, auth)
+    return action_status
