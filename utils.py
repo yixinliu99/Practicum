@@ -26,7 +26,7 @@ def thaw_objects(complete_path, action_id):
                 s3.restore_object(Bucket=source_bucket, Key=obj['Key'], RestoreRequest={'Days': 1})
                 dynamodb.put_item(TableName='MPCS-Practicum-2024',
                                   Item={'action_id': {'S': action_id}, 'object_id': {'S': obj['Key']}})
-                set_notification(obj['Key'], action_id)
+                # set_notification(obj['Key'], action_id)
             except Exception as e:
                 print(e)
                 return False  # todo: error handling
