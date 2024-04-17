@@ -19,6 +19,11 @@
       "description": "When set, shell glob characters '*?[]' in the last path component are interpreted as a pattern. This also enables backslash escapes for literal uses of these characters and the backslash character. Like *NIX operating systems, glob characters will not match files or directories that start with '.', and a literal '.' character is required in such cases. The special directories entries '.' and '..' are never matched. Symlinks found during glob expansion are deleted and never followed.",
       "type": "boolean"
     },
+    "bucket_name": {
+      "maxLength": 64,
+      "minLength": 2,
+      "type": "string"
+    },
     "items": {
       "items": {
         "type": "string"

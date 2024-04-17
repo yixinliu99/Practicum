@@ -71,6 +71,8 @@ def thaw_action_run(
         display_status=ActionStatusValue.ACTIVE,
         details={},
     )
+    print(action_request.body)
+    print('\n\n\n\n\n')
     utils.thaw_objects(action_request.body['items'], action_status.action_id)
     return action_status
 
