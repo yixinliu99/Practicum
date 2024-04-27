@@ -1,4 +1,8 @@
+import concurrent
 import boto3
+from model.ThawMetadata import ThawMetadata
+from model.ThawStatus import ThawStatus
+import datetime
 
 GLACIER = 'GLACIER'
 DEEP_ARCHIVE = 'DEEP_ARCHIVE'
@@ -11,44 +15,52 @@ def thaw_objects(complete_path, action_id):
     dynamodb = boto3.client('dynamodb', region_name='us-east-1')  # todo: must specify region_name
     source_bucket = complete_path.split('/')[0]
     name = '/'.join(complete_path.split('/')[1:])
+    keys = []
     print(complete_path)
     print(source_bucket)
     print(name)
-    list_objects = s3.list_objects_v2(Bucket=source_bucket)  # todo: list_objects_v2 pagination (1k items max/ page)
-    print(list_objects)
-    for obj in list_objects['Contents']:
-        if not obj['Key'].startswith(name):
-            continue
 
-        obj_class = obj['StorageClass']
-        if obj_class in ARCHIVE_CLASSES:
-            try:
-                s3.restore_object(Bucket=source_bucket, Key=obj['Key'], RestoreRequest={'Days': 1})
-                dynamodb.put_item(TableName='MPCS-Practicum-2024',
-                                  Item={'action_id': {'S': action_id}, 'object_id': {'S': obj['Key']}})
-                # set_sns_topic(obj['Key'], action_id)
-            except Exception as e:
-                print(e)
-                return False  # todo: error handling
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=source_bucket)
+    for page in pages:
+        for obj in page['Contents']:
+            if not obj['Key'].startswith(name):
+                continue
+
+            obj_class = obj['StorageClass']
+            if obj_class in ARCHIVE_CLASSES:
+                keys.append(obj['Key'])
+
+    metadata = ThawMetadata(action_id,
+                            complete_path,
+                            ThawStatus.INITIATED,
+                            datetime.datetime.now().isoformat(),
+                            None,
+                            None)
+    init_s3_restore(source_bucket, keys, s3)
+    put_thaw_metadata(metadata, dynamodb)
 
     return True
 
 
-def set_sns_topic(obj_key, action_id):
-    sns = boto3.client('sns')
-    response = sns.create_topic(
-        Name='string',
-        Attributes={
-            'string': 'string'
-        },
-        Tags=[
-            {
-                'Key': 'string',
-                'Value': 'string'
-            },
-        ],
-        DataProtectionPolicy='string'
-    )
+def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(
+            s3_client.restore_object,
+            Bucket=source_bucket,
+            Key=key,
+            RestoreRequest={'Days': 1})
+            for key in keys]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                print(e)  # todo: logger
+                return False
+
+
+def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
+    dynamodb_client.put_item(TableName='MPCS-Practicum-2024', Item=metadata.marshal()) # todo: table name
 
 
 if __name__ == "__main__":
