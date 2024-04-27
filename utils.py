@@ -8,7 +8,7 @@ ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
 
 def thaw_objects(complete_path, action_id):
     s3 = boto3.client('s3')
-    dynamodb = boto3.client('dynamodb', region_name='us-east-1')
+    dynamodb = boto3.client('dynamodb', region_name='us-east-1')  # todo: must specify region_name
     source_bucket = complete_path.split('/')[0]
     name = '/'.join(complete_path.split('/')[1:])
     print(complete_path)
@@ -52,4 +52,4 @@ def set_sns_topic(obj_key, action_id):
 
 
 if __name__ == "__main__":
-    print(thaw_objects('mpcs-practicum/testdata', '1'))
+    print(thaw_objects('mpcs-practicum/test00', '1'))
