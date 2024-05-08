@@ -71,37 +71,36 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
 
 
 def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
-    filter_rules = []
     for k in keys:
-        filter_rules.append({
+        filter_rules = [{
             'Name': 'prefix',
             'Value': k,
-        })
+        }]
 
-    notification_configuration = {
-        'TopicConfigurations': [
-            {
-                'TopicArn': 'arn:aws:sns:us-east-1:074950442422:Practicum-2024',  # todo: SNS ARN
-                'Events': [
-                    's3:ObjectRestore:*'
-                ],
-                'Filter': {
-                    "Key": {
-                        'FilterRules': filter_rules
+        notification_configuration = {
+            'TopicConfigurations': [
+                {
+                    'TopicArn': 'arn:aws:sns:us-east-1:074950442422:Practicum-2024',  # todo: SNS ARN
+                    'Events': [
+                        's3:ObjectRestore:*'
+                    ],
+                    'Filter': {
+                        "Key": {
+                            'FilterRules': filter_rules
+                        }
                     }
                 }
-            }
-        ]
-    }
-    try:
-        response = s3_client.put_bucket_notification_configuration(
-            Bucket=bucket_name,
-            NotificationConfiguration=notification_configuration
-        )
-        print(response)
+            ]
+        }
+        try:
+            response = s3_client.put_bucket_notification_configuration(
+                Bucket=bucket_name,
+                NotificationConfiguration=notification_configuration
+            )
+            print(response)
 
-    except Exception as e:
-        print(e)
+        except Exception as e:
+            print(e)
 
 
 def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
@@ -109,5 +108,5 @@ def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
 
 
 if __name__ == "__main__":
-    res = thaw_objects('mpcs-practicum/test00', '1')
+    res = thaw_objects('mpcs-practicum/testdata', '1')
     print(res)
