@@ -31,25 +31,26 @@ def thaw_objects(complete_path, action_id):
         ]
     )
 
+    possibly_completed_objects_key = []
     for page in pages:
         for obj in page['Contents']:
             if obj['StorageClass'] in ARCHIVE_CLASSES:
                 keys.append(obj['Key'])
                 status = ThawStatus.INITIATED
-                if 'RestoreStatus' in obj and not obj['RestoreStatus']['IsRestoreInProgress'] and datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']:
-                    status = ThawStatus.COMPLETED
+                if is_thaw_in_progress_or_completed(obj):
+                    possibly_completed_objects_key.append(obj['Key'])
 
                 metadata = ThawMetadata(action_id,
                                         source_bucket + "/" + obj['Key'],
                                         status,
                                         datetime.now().isoformat(),
-                                        None,
                                         None)
 
                 put_thaw_metadata(metadata, dynamodb)
 
     set_s3_notification(source_bucket, keys, s3)
     init_s3_restore(source_bucket, keys, s3)
+    # todo: check possibly_completed_objects_key status
 
     return True
 
@@ -105,6 +106,12 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
 
 def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
     dynamodb_client.put_item(TableName='MPCS-Practicum-2024', Item=metadata.marshal())  # todo: table name
+
+
+def is_thaw_in_progress_or_completed(obj):
+    return 'RestoreStatus' in obj and ((obj['RestoreStatus']['IsRestoreInProgress']) or
+                                       (not obj['RestoreStatus']['IsRestoreInProgress'] and
+                                        datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
 
 
 if __name__ == "__main__":
