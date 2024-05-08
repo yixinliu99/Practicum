@@ -9,10 +9,9 @@ class ThawMetadata:
     object_id: str
     status: ThawStatus
     start_time: str
-    completion_time: str
-    expiration_time: str
+    expiry_time: str
 
-    def __init__(self, action_id, object_id, status: ThawStatus, start_time, completion_time, expiration_time):
+    def __init__(self, action_id, object_id, status: ThawStatus, start_time, expiry_time):
         if not action_id:
             raise ValueError('action_id is required')
         if not object_id:
@@ -24,8 +23,7 @@ class ThawMetadata:
         self.object_id = object_id
         self.status = status
         self.start_time = start_time if start_time else ''
-        self.completion_time = completion_time if completion_time else ''
-        self.expiration_time = expiration_time if expiration_time else ''
+        self.expiry_time = expiry_time if expiry_time else ''
 
     def marshal(self):
         res = {
@@ -33,8 +31,7 @@ class ThawMetadata:
             'object_id': {'S': self.object_id},
             'status': {'S': self.status},
             'start_time': {'S': self.start_time},
-            'completion_time': {'S': self.completion_time},
-            'expiration_time': {'S': self.expiration_time}
+            'expiry_time': {'S': self.expiry_time}
         }
 
         return res
