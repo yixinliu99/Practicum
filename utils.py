@@ -113,9 +113,7 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
         pattern = r'ongoing-request="(\w+)"(?:,\s+expiry-date="(.+?)")?'
         matches = re.search(pattern, input_string)
         if matches:
-            ongoing_request = matches.group(1)
-            expiry_datetime = matches.group(2) if matches.group(2) else None
-            return ongoing_request, expiry_datetime
+            return matches.group(1), matches.group(2) if matches.group(2) else None
         else:
             return None, None
 
