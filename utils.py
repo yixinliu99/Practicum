@@ -1,9 +1,11 @@
 import concurrent
+from datetime import *
+
 import boto3
+from dateutil.tz import *
+
 from model.ThawMetadata import ThawMetadata
 from model.ThawStatus import ThawStatus
-from datetime import *
-from dateutil.tz import *
 
 GLACIER = 'GLACIER'
 DEEP_ARCHIVE = 'DEEP_ARCHIVE'
@@ -14,17 +16,17 @@ ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
 def thaw_objects(complete_path, action_id):
     s3 = boto3.client('s3')
     dynamodb = boto3.client('dynamodb', region_name='us-east-1')  # todo: must specify region_name
-    source_bucket = complete_path.split('/')[0]
-    name = '/'.join(complete_path.split('/')[1:])
+    source_bucket = complete_path.split('/')[1]
+    prefix = '/'.join(complete_path.split('/')[2:])
     keys = []
     print(complete_path)
     print(source_bucket)
-    print(name)
+    print(prefix)
 
     paginator = s3.get_paginator('list_objects_v2')
     pages = paginator.paginate(
         Bucket=source_bucket,
-        Prefix=name,
+        Prefix=prefix,
         OptionalObjectAttributes=
         [
             'RestoreStatus',
@@ -48,20 +50,26 @@ def thaw_objects(complete_path, action_id):
 
                 put_thaw_metadata(metadata, dynamodb)
 
-    set_s3_notification(source_bucket, keys, s3)
-    init_s3_restore(source_bucket, keys, s3)
-    # todo: check possibly_completed_objects_key status
+    handle_error(set_s3_notification(source_bucket, keys, s3))
+    handle_error(init_s3_restore(source_bucket, keys, s3))
+    handle_error(check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
+                                                           dynamodb))
 
     return True
 
 
-def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
+def handle_error(f):
+    if not f:
+        raise Exception
+
+
+def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client) -> bool:
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(
             s3_client.restore_object,
             Bucket=source_bucket,
             Key=key,
-            RestoreRequest={'Days': 1})
+            RestoreRequest={'Days': 1})  # todo: lifecycle policy
             for key in keys]
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -71,11 +79,11 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
                 return False
 
 
-def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
-    for k in keys:
+def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client) -> bool:
+    def set_notification(key):
         filter_rules = [{
             'Name': 'prefix',
-            'Value': k,
+            'Value': key,
         }]
 
         notification_configuration = {
@@ -103,6 +111,48 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
         except Exception as e:
             print(e)
 
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(set_notification, key) for key in keys]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                print(e)
+                return False
+
+    return True
+
+
+def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
+                                              dynamodb_client: boto3.client) -> bool:
+    def parse_string(input_string):
+        import re
+        pattern = r'ongoing-request="(\w+)"(?:,\s+expiry-date="(.+?)")?'
+        matches = re.search(pattern, input_string)
+        if matches:
+            return matches.group(1), matches.group(2) if matches.group(2) else None
+        else:
+            return None, None
+
+    try:
+        for key in keys:
+            response = s3_client.head_object(Bucket=bucket_name, Key=key)
+            if response['Restore']:
+                ongoing_request, expiry_datetime = parse_string(response['Restore'])
+                expiry_datetime = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
+                if ongoing_request == 'false':
+                    metadata = ThawMetadata(action_id,
+                                            bucket_name + "/" + key,
+                                            ThawStatus.COMPLETED,
+                                            None,
+                                            expiry_datetime)
+                    put_thaw_metadata(metadata, dynamodb_client)
+    except Exception as e:
+        print(e)
+        return False
+
+    return True
+
 
 def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
     dynamodb_client.put_item(TableName='MPCS-Practicum-2024', Item=metadata.marshal())  # todo: table name
@@ -115,5 +165,5 @@ def is_thaw_in_progress_or_completed(obj):
 
 
 if __name__ == "__main__":
-    res = thaw_objects('mpcs-practicum/testdata', '1')
+    res = thaw_objects('/mpcs-practicum/testdata', '1')
     print(res)
