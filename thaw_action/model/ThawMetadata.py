@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from model.ThawStatus import ThawStatus
-import json
+from thaw_action.model.ThawStatus import ThawStatus
 
 
 @dataclass
