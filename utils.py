@@ -58,7 +58,7 @@ def thaw_objects(complete_path, action_id):
     return True
 
 
-def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client) -> bool:
+def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(
             s3_client.restore_object,
@@ -67,14 +67,10 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client) -> 
             RestoreRequest={'Days': 1})  # todo: lifecycle policy
             for key in keys]
         for future in concurrent.futures.as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                print(e)  # todo: logger
-                return False
+            future.result()
 
 
-def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client) -> bool:
+def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
     def set_notification(key):
         filter_rules = [{
             'Name': 'prefix',
@@ -109,17 +105,11 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client) 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(set_notification, key) for key in keys]
         for future in concurrent.futures.as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                print(e)
-                return False
-
-    return True
+            future.result()
 
 
 def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
-                                              dynamodb_client: boto3.client) -> bool:
+                                              dynamodb_client: boto3.client):
     def parse_string(input_string):
         import re
         pattern = r'ongoing-request="(\w+)"(?:,\s+expiry-date="(.+?)")?'
@@ -129,24 +119,18 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
         else:
             return None, None
 
-    try:
-        for key in keys:
-            response = s3_client.head_object(Bucket=bucket_name, Key=key)
-            if response['Restore']:
-                ongoing_request, expiry_datetime = parse_string(response['Restore'])
-                expiry_datetime = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
-                if ongoing_request == 'false':
-                    metadata = ThawMetadata(action_id,
-                                            bucket_name + "/" + key,
-                                            ThawStatus.COMPLETED,
-                                            None,
-                                            expiry_datetime)
-                    put_thaw_metadata(metadata, dynamodb_client)
-    except Exception as e:
-        print(e)
-        return False
-
-    return True
+    for key in keys:
+        response = s3_client.head_object(Bucket=bucket_name, Key=key)
+        if response['Restore']:
+            ongoing_request, expiry_datetime = parse_string(response['Restore'])
+            expiry_datetime = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
+            if ongoing_request == 'false':
+                metadata = ThawMetadata(action_id,
+                                        bucket_name + "/" + key,
+                                        ThawStatus.COMPLETED,
+                                        None,
+                                        expiry_datetime)
+                put_thaw_metadata(metadata, dynamodb_client)
 
 
 def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
