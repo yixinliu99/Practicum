@@ -12,15 +12,19 @@ GLACIER = 'GLACIER'
 DEEP_ARCHIVE = 'DEEP_ARCHIVE'
 INTELLIGENT_TIERING = 'INTELLIGENT_TIERING'
 ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
+TABLE_NAME = 'MPCS-Practicum-2024'
+REGION_NAME = 'us-east-1'
+SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:074950442422:Practicum-2024'
+GSI_NAME = 'action_id-object_id-index'
 
 
 def thaw_objects(complete_path, action_id):
     s3 = boto3.client('s3')
-    dynamodb = boto3.client('dynamodb', region_name='us-east-1')  # todo: must specify region_name
+    dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)
     source_bucket = complete_path.split('/')[1]
     prefix = '/'.join(complete_path.split('/')[2:])
     keys = []
-    dynamo_accessor = dynamoAccessor.DynamoAccessor(dynamodb, 'MPCS-Practicum-2024')  # todo: table name
+    dynamo_accessor = dynamoAccessor.DynamoAccessor(dynamodb, TABLE_NAME)
     print(complete_path)
     print(source_bucket)
     print(prefix)
@@ -82,7 +86,7 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
         notification_configuration = {
             'TopicConfigurations': [
                 {
-                    'TopicArn': 'arn:aws:sns:us-east-1:074950442422:Practicum-2024',  # todo: SNS ARN
+                    'TopicArn': SNS_TOPIC_ARN,
                     'Events': [
                         's3:ObjectRestore:*'
                     ],
@@ -145,6 +149,19 @@ def is_thaw_in_progress_or_completed(obj):
     return 'RestoreStatus' in obj and ((obj['RestoreStatus']['IsRestoreInProgress']) or
                                        (not obj['RestoreStatus']['IsRestoreInProgress'] and
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
+
+
+def check_thaw_status(action_id: str):
+    dynamo_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME), TABLE_NAME)
+    result = dynamo_accessor.query_items(
+        partition_key_expression="pk = :pk",
+        sort_key_expression="sk = :sk",
+        key_mapping={"pk": {"S": action_id}, "sk": {"S": ThawStatus.INITIATED}},
+        index_name="action_id-status-index",
+        select="COUNT"
+    )
+
+    return result[0]['Count'] == 0
 
 
 if __name__ == "__main__":
