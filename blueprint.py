@@ -1,9 +1,6 @@
 from datetime import datetime, timezone
-from typing import Dict, List, Set
-import utils
+from thaw_action import utils
 import json
-
-from flask import request
 
 from globus_action_provider_tools import (
     ActionProviderDescription,
@@ -14,13 +11,11 @@ from globus_action_provider_tools import (
 )
 from globus_action_provider_tools.authorization import (
     authorize_action_access_or_404,
-    authorize_action_management_or_404,
 )
 from globus_action_provider_tools.flask import ActionProviderBlueprint
-from globus_action_provider_tools.flask.exceptions import ActionConflict, ActionNotFound
+from globus_action_provider_tools.flask.exceptions import ActionNotFound
 from globus_action_provider_tools.flask.types import (
     ActionCallbackReturn,
-    ActionLogReturn,
 )
 
 
@@ -71,21 +66,34 @@ def thaw_action_run(
         display_status=ActionStatusValue.ACTIVE,
         details={},
     )
-    print(action_request.body)
-    print('\n\n\n\n\n')
+    # print(action_request.body)#todo del
+    # print('\n\n\n\n\n')
     utils.thaw_objects(action_request.body['items'], action_status.action_id)
     return action_status
 
 
-@aptb.action_status
-def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
-    """
-    Query for the action_id in some storage backend to return the up-to-date
-    ActionStatus. It's possible that some ActionProviders will require querying
-    an external system to get up to date information on an Action's status.
-    """
-    action_status = True
-    if action_status is None:
-        raise ActionNotFound(f"No action with {action_id}")
-    authorize_action_access_or_404(action_status, auth)
-    return action_status
+# todo status
+# @aptb.action_status
+# def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+#     """
+#     Query for the action_id in some storage backend to return the up-to-date
+#     ActionStatus. It's possible that some ActionProviders will require querying
+#     an external system to get up to date information on an Action's status.
+#     """
+#     thaw_succeeded = utils.check_thaw_status(action_id)
+#     action_status = ActionStatus(
+#         status=ActionStatusValue.SUCCEEDED if thaw_succeeded else ActionStatusValue.ACTIVE,
+#         creator_id=str(auth.effective_identity),
+#         label=action_request.label or None,
+#         monitor_by=action_request.monitor_by or auth.identities,
+#         manage_by=action_request.manage_by or auth.identities,
+#         start_time=datetime.now(timezone.utc).isoformat(),
+#         completion_time=None,
+#         release_after=action_request.release_after or "P30D",
+#         display_status=ActionStatusValue.ACTIVE,
+#         details={},
+#     )
+#     if action_status is None:
+#         raise ActionNotFound(f"No action with {action_id}")
+#     authorize_action_access_or_404(action_status, auth)
+#     return action_status

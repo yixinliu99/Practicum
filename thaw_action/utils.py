@@ -6,19 +6,25 @@ from dateutil.tz import *
 
 from model.ThawMetadata import ThawMetadata
 from model.ThawStatus import ThawStatus
+from db_accessor import dynamoAccessor
 
 GLACIER = 'GLACIER'
 DEEP_ARCHIVE = 'DEEP_ARCHIVE'
 INTELLIGENT_TIERING = 'INTELLIGENT_TIERING'
 ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
+TABLE_NAME = 'MPCS-Practicum-2024'
+REGION_NAME = 'us-east-1'
+SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:074950442422:Practicum-2024'
+GSI_NAME = 'action_id-object_id-index'
 
 
 def thaw_objects(complete_path, action_id):
     s3 = boto3.client('s3')
-    dynamodb = boto3.client('dynamodb', region_name='us-east-1')  # todo: must specify region_name
+    dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)
     source_bucket = complete_path.split('/')[1]
     prefix = '/'.join(complete_path.split('/')[2:])
     keys = []
+    dynamo_accessor = dynamoAccessor.DynamoAccessor(dynamodb, TABLE_NAME)
     print(complete_path)
     print(source_bucket)
     print(prefix)
@@ -48,11 +54,12 @@ def thaw_objects(complete_path, action_id):
                                         datetime.now().isoformat(),
                                         None)
 
-                put_thaw_metadata(metadata, dynamodb)
+                dynamo_accessor.put_item(metadata.marshal())
 
     set_s3_notification(source_bucket, keys, s3)
     init_s3_restore(source_bucket, keys, s3)
-    check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3, dynamodb)
+    check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
+                                              dynamo_accessor)
 
     return True
 
@@ -63,14 +70,10 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
             s3_client.restore_object,
             Bucket=source_bucket,
             Key=key,
-            RestoreRequest={'Days': 1})
+            RestoreRequest={'Days': 1})  # todo: lifecycle policy
             for key in keys]
         for future in concurrent.futures.as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                print(e)  # todo: logger
-                return False
+            future.result()
 
 
 def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
@@ -83,7 +86,7 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
         notification_configuration = {
             'TopicConfigurations': [
                 {
-                    'TopicArn': 'arn:aws:sns:us-east-1:074950442422:Practicum-2024',  # todo: SNS ARN
+                    'TopicArn': SNS_TOPIC_ARN,
                     'Events': [
                         's3:ObjectRestore:*'
                     ],
@@ -106,11 +109,13 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
             print(e)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        executor.map(set_notification, keys)
+        futures = [executor.submit(set_notification, key) for key in keys]
+        for future in concurrent.futures.as_completed(futures):
+            future.result()
 
 
 def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
-                                              dynamodb_client: boto3.client):
+                                              dynamo_accessor: dynamoAccessor.DynamoAccessor):
     def parse_string(input_string):
         import re
         pattern = r'ongoing-request="(\w+)"(?:,\s+expiry-date="(.+?)")?'
@@ -124,24 +129,39 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
         if response['Restore']:
             ongoing_request, expiry_datetime = parse_string(response['Restore'])
-            expiry_datetime = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
+            expiry_time = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
+            object_id = bucket_name + "/" + key
             if ongoing_request == 'false':
-                metadata = ThawMetadata(action_id,
-                                        bucket_name + "/" + key,
-                                        ThawStatus.COMPLETED,
-                                        None,
-                                        expiry_datetime)
-                put_thaw_metadata(metadata, dynamodb_client)
-
-
-def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
-    dynamodb_client.put_item(TableName='MPCS-Practicum-2024', Item=metadata.marshal())  # todo: table name
+                update_expression = "SET #attr_name1 = :attr_value1, #attr_name2 = :attr_value2"
+                expression_attribute_names = {'#attr_name1': 'status', '#attr_name2': 'expiry_time'}
+                expression_attribute_values = {':attr_value1': 'COMPLETED', ':attr_value2': expiry_time}
+                dynamo_accessor.update_item(
+                    key={
+                        'object_id': object_id
+                    },
+                    update_expression=update_expression,
+                    expression_attribute_values=expression_attribute_values,
+                    expression_attribute_names=expression_attribute_names
+                )
 
 
 def is_thaw_in_progress_or_completed(obj):
     return 'RestoreStatus' in obj and ((obj['RestoreStatus']['IsRestoreInProgress']) or
                                        (not obj['RestoreStatus']['IsRestoreInProgress'] and
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
+
+
+def check_thaw_status(action_id: str):
+    dynamo_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME), TABLE_NAME)
+    result = dynamo_accessor.query_items(
+        partition_key_expression="pk = :pk",
+        sort_key_expression="sk = :sk",
+        key_mapping={"pk": {"S": action_id}, "sk": {"S": ThawStatus.INITIATED}},
+        index_name="action_id-status-index",
+        select="COUNT"
+    )
+
+    return result[0]['Count'] == 0
 
 
 if __name__ == "__main__":
