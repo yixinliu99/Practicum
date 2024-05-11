@@ -50,17 +50,12 @@ def thaw_objects(complete_path, action_id):
 
                 put_thaw_metadata(metadata, dynamodb)
 
-    handle_error(set_s3_notification(source_bucket, keys, s3))
-    handle_error(init_s3_restore(source_bucket, keys, s3))
-    handle_error(check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
-                                                           dynamodb))
+    set_s3_notification(source_bucket, keys, s3)
+    init_s3_restore(source_bucket, keys, s3)
+    check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
+                                              dynamodb)
 
     return True
-
-
-def handle_error(f):
-    if not f:
-        raise Exception
 
 
 def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client) -> bool:
