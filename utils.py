@@ -74,10 +74,10 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
 
 
 def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
-    for k in keys:
+    def set_notification(key):
         filter_rules = [{
             'Name': 'prefix',
-            'Value': k,
+            'Value': key,
         }]
 
         notification_configuration = {
@@ -104,6 +104,9 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
 
         except Exception as e:
             print(e)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(set_notification, keys)
 
 
 def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
