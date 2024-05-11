@@ -6,6 +6,7 @@ from dateutil.tz import *
 
 from model.ThawMetadata import ThawMetadata
 from model.ThawStatus import ThawStatus
+from db_accessor import dynamoAccessor
 
 GLACIER = 'GLACIER'
 DEEP_ARCHIVE = 'DEEP_ARCHIVE'
@@ -19,6 +20,7 @@ def thaw_objects(complete_path, action_id):
     source_bucket = complete_path.split('/')[1]
     prefix = '/'.join(complete_path.split('/')[2:])
     keys = []
+    dynamo_accessor = dynamoAccessor.DynamoAccessor(dynamodb, 'MPCS-Practicum-2024')  # todo: table name
     print(complete_path)
     print(source_bucket)
     print(prefix)
@@ -48,12 +50,12 @@ def thaw_objects(complete_path, action_id):
                                         datetime.now().isoformat(),
                                         None)
 
-                put_thaw_metadata(metadata, dynamodb)
+                dynamo_accessor.put_item(metadata.marshal())
 
     set_s3_notification(source_bucket, keys, s3)
     init_s3_restore(source_bucket, keys, s3)
     check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
-                                              dynamodb)
+                                              dynamo_accessor)
 
     return True
 
@@ -109,7 +111,7 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
 
 
 def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
-                                              dynamodb_client: boto3.client):
+                                              dynamo_accessor: dynamoAccessor.DynamoAccessor):
     def parse_string(input_string):
         import re
         pattern = r'ongoing-request="(\w+)"(?:,\s+expiry-date="(.+?)")?'
@@ -123,18 +125,20 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
         if response['Restore']:
             ongoing_request, expiry_datetime = parse_string(response['Restore'])
-            expiry_datetime = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
+            expiry_time = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
+            object_id = bucket_name + "/" + key
             if ongoing_request == 'false':
-                metadata = ThawMetadata(action_id,
-                                        bucket_name + "/" + key,
-                                        ThawStatus.COMPLETED,
-                                        None,
-                                        expiry_datetime)
-                put_thaw_metadata(metadata, dynamodb_client)
-
-
-def put_thaw_metadata(metadata: ThawMetadata, dynamodb_client: boto3.client):
-    dynamodb_client.put_item(TableName='MPCS-Practicum-2024', Item=metadata.marshal())  # todo: table name
+                update_expression = "SET #attr_name1 = :attr_value1, #attr_name2 = :attr_value2"
+                expression_attribute_names = {'#attr_name1': 'status', '#attr_name2': 'expiry_time'}
+                expression_attribute_values = {':attr_value1': 'COMPLETED', ':attr_value2': expiry_time}
+                dynamo_accessor.update_item(
+                    key={
+                        'object_id': object_id
+                    },
+                    update_expression=update_expression,
+                    expression_attribute_values=expression_attribute_values,
+                    expression_attribute_names=expression_attribute_names
+                )
 
 
 def is_thaw_in_progress_or_completed(obj):
