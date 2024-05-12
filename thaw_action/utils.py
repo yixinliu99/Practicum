@@ -133,11 +133,13 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
             object_id = bucket_name + "/" + key
             if ongoing_request == 'false':
                 update_expression = "SET #attr_name1 = :attr_value1, #attr_name2 = :attr_value2"
-                expression_attribute_names = {'#attr_name1': 'status', '#attr_name2': 'expiry_time'}
-                expression_attribute_values = {':attr_value1': 'COMPLETED', ':attr_value2': expiry_time}
+                expression_attribute_names = {'#attr_name1': ThawMetadata.THAW_STATUS,
+                                              '#attr_name2': ThawMetadata.EXPIRY_TIME}
+                expression_attribute_values = {':attr_value1': {"S": ThawStatus.COMPLETED},
+                                               ':attr_value2': {"S": expiry_time}}
                 dynamo_accessor.update_item(
                     key={
-                        'object_id': object_id
+                        'object_id': {"S": object_id},
                     },
                     update_expression=update_expression,
                     expression_attribute_values=expression_attribute_values,
@@ -154,9 +156,9 @@ def is_thaw_in_progress_or_completed(obj):
 def check_thaw_status(action_id: str):
     dynamo_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME), TABLE_NAME)
     result = dynamo_accessor.query_items(
-        partition_key_expression="pk = :pk",
-        sort_key_expression="sk = :sk",
-        key_mapping={"pk": {"S": action_id}, "sk": {"S": ThawStatus.INITIATED}},
+        partition_key_expression="action_id = :action_id",
+        sort_key_expression="status = :status",
+        key_mapping={":action_id": {"S": action_id}, ":status": {"S": ThawStatus.INITIATED}},
         index_name="action_id-status-index",
         select="COUNT"
     )
@@ -166,4 +168,5 @@ def check_thaw_status(action_id: str):
 
 if __name__ == "__main__":
     res = thaw_objects('/mpcs-practicum/testdata', '1')
+    # res = check_thaw_status('1')
     print(res)
