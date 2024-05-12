@@ -15,7 +15,7 @@ ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
 TABLE_NAME = 'MPCS-Practicum-2024'
 REGION_NAME = 'us-east-1'
 SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:074950442422:Practicum-2024'
-GSI_NAME = 'action_id-object_id-index'
+GSI_INDEX_NAME = 'action_id-thaw_status-index'
 
 
 def thaw_objects(complete_path, action_id):
@@ -156,17 +156,18 @@ def is_thaw_in_progress_or_completed(obj):
 def check_thaw_status(action_id: str):
     dynamo_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME), TABLE_NAME)
     result = dynamo_accessor.query_items(
-        partition_key_expression="action_id = :action_id",
-        sort_key_expression="status = :status",
-        key_mapping={":action_id": {"S": action_id}, ":status": {"S": ThawStatus.INITIATED}},
-        index_name="action_id-status-index",
+        partition_key_expression=f"{ThawMetadata.ACTION_ID} = :{ThawMetadata.ACTION_ID}",
+        sort_key_expression=f"{ThawMetadata.THAW_STATUS} = :{ThawMetadata.THAW_STATUS}",
+        key_mapping={f":{ThawMetadata.ACTION_ID}": {"S": action_id},
+                     f":{ThawMetadata.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
+        index_name=GSI_INDEX_NAME,
         select="COUNT"
     )
 
-    return result[0]['Count'] == 0
+    return result['Count'] == 0
 
 
 if __name__ == "__main__":
-    res = thaw_objects('/mpcs-practicum/testdata', '1')
-    # res = check_thaw_status('1')
+    # res = thaw_objects('/mpcs-practicum/testdata', '1')
+    res = check_thaw_status('1')
     print(res)
