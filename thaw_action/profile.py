@@ -11,13 +11,15 @@ from globus_action_provider_tools import (
     AuthState,
 )
 from globus_action_provider_tools.authorization import (
-    authorize_action_access_or_404,
+    authorize_action_access_or_404, authorize_action_management_or_404,
 )
 from globus_action_provider_tools.flask import ActionProviderBlueprint
-from globus_action_provider_tools.flask.exceptions import ActionNotFound
+from globus_action_provider_tools.flask.exceptions import ActionNotFound, ActionConflict
 from globus_action_provider_tools.flask.types import (
     ActionCallbackReturn,
 )
+
+from thaw_action.utils import get_thaw_status
 
 thaw_schema = json.load(open('./thaw_action/action_definition/input_schema.json', 'r'))
 auth_scope = "https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all"
@@ -81,24 +83,70 @@ def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     ActionStatus. It's possible that some ActionProviders will require querying
     an external system to get up to date information on an Action's status.
     """
-    action_status, res = utils.check_thaw_status(action_id)
-    if res is None:
+    action_status = utils.check_thaw_status(action_id)
+    if action_status is None:
         raise ActionNotFound(f"No action with {action_id}")
-    if res:
-        status = ActionStatusValue.SUCCEEDED
-    else:
-        status = ActionStatusValue.ACTIVE
-    action_status = ActionStatus(
-        status=status,
-        creator_id=action_status['creator_id'],
-        label=action_status['label'],
-        monitor_by=action_status['monitor_by'],
-        manage_by=action_status['manage_by'],
-        start_time=action_status['start_time'],
-        completion_time=action_status['completion_time'],
-        release_after=action_status['release_after'],
-        display_status=action_status['display_status'],
-        details=action_status['details'],
-    )
+    action_status = _dict_to_action_status(action_status)
     authorize_action_access_or_404(action_status, auth)
     return action_status
+
+
+@thaw_aptb.action_cancel
+def my_action_cancel(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+    """
+    Only Actions that are not in a completed state may be cancelled.
+    Cancellations do not necessarily require that an Action's execution be
+    stopped. Once cancelled, the ActionStatus object should be updated and
+    stored.
+    """
+    action_status = get_thaw_status(action_id)
+    if action_status is None:
+        raise ActionNotFound(f"No action with {action_id}")
+    action_status = _dict_to_action_status(action_status)
+    authorize_action_management_or_404(action_status, auth)
+    if action_status.is_complete():
+        raise ActionConflict("Cannot cancel complete action")
+
+    action_status.status = ActionStatusValue.FAILED
+    action_status.display_status = f"Cancelled by {auth.effective_identity}"
+    json_encoder = current_app.json
+    utils.update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
+    return action_status
+
+
+@thaw_aptb.action_release
+def my_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+    """
+    Only Actions that are in a completed state may be released. The release
+    operation removes the ActionStatus object from the data store. The final, up
+    to date ActionStatus is returned after a successful release.
+    """
+    action_status = get_thaw_status(action_id)
+    if action_status is None:
+        raise ActionNotFound(f"No action with {action_id}")
+    action_status = _dict_to_action_status(action_status)
+
+    authorize_action_management_or_404(action_status, auth)
+    if not action_status.is_complete():
+        raise ActionConflict("Cannot release incomplete Action")
+
+    action_status.display_status = f"Released by {auth.effective_identity}"
+    json_encoder = current_app.json
+    utils.update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
+
+    return action_status
+
+
+def _dict_to_action_status(action_status_dict: dict) -> ActionStatus:
+    return ActionStatus(
+        status=action_status_dict['status'],
+        creator_id=action_status_dict['creator_id'],
+        label=action_status_dict['label'],
+        monitor_by=action_status_dict['monitor_by'],
+        manage_by=action_status_dict['manage_by'],
+        start_time=action_status_dict['start_time'],
+        completion_time=action_status_dict['completion_time'],
+        release_after=action_status_dict['release_after'],
+        display_status=action_status_dict['display_status'],
+        details=action_status_dict['details'],
+    )

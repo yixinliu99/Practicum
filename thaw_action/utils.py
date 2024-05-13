@@ -150,14 +150,12 @@ def is_thaw_in_progress_or_completed(obj):
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
 
 
-def check_thaw_status(action_id: str):
+def check_thaw_status(action_id: str) -> dict:
     objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
                                                             OBJECTS_STATUS_TABLE_NAME)
-    action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
-                                                           ACTION_STATUS_TABLE_NAME)
-    action_status = action_status_accessor.get_item(key={"action_id": {"S": action_id}})  # todo string
+    action_status = get_thaw_status(action_id)
     if not action_status:
-        return action_status, None
+        return None
     result = objects_status_accessor.query_items(
         partition_key_expression=f"{ThawMetadata.ACTION_ID} = :{ThawMetadata.ACTION_ID}",
         sort_key_expression=f"{ThawMetadata.THAW_STATUS} = :{ThawMetadata.THAW_STATUS}",
@@ -166,7 +164,33 @@ def check_thaw_status(action_id: str):
         index_name=GSI_INDEX_NAME,
         select="COUNT"
     )
+    action_status = json.loads(action_status['contents']['S'])
     if result['Count'] == 0:
-        return json.loads(action_status['contents']['S']), True
-    else:
-        return json.loads(action_status['contents']['S']), False
+        update_thaw_status(action_id, ThawStatus.COMPLETED)
+        action_status['status'] = ThawStatus.COMPLETED
+        action_status['display_status'] = ThawStatus.COMPLETED
+
+    return action_status
+
+
+def get_thaw_status(action_id: str) -> dict:
+    action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
+                                                           ACTION_STATUS_TABLE_NAME)
+    action_status = action_status_accessor.get_item(key={"action_id": {"S": action_id}})  # todo string
+
+    return json.loads(action_status['contents']['S']) if action_status else None
+
+
+def update_thaw_status(action_id: str, thaw_status: str) -> bool:
+    dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)
+    action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, ACTION_STATUS_TABLE_NAME)
+    action_status_accessor.update_item(
+        key={
+            'action_id': {"S": action_id},
+        },
+        update_expression="SET #attr_name = :attr_value",
+        expression_attribute_values={':attr_value': {"S": thaw_status}},
+        expression_attribute_names={'#attr_name': 'status'}
+    )
+
+    return True
