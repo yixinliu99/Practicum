@@ -22,6 +22,7 @@ GSI_INDEX_NAME = 'action_id-thaw_status-index'
 
 
 def thaw_objects(complete_path, action_status):
+    complete_path = complete_path[0]  # todo: multiple items?
     action_id = action_status['action_id']
     s3 = boto3.client('s3')
     dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)

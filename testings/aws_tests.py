@@ -13,7 +13,7 @@ def test_thaw():
     app = create_app()
     json_encoder = app.json
     dummy_action_status = json_encoder.loads(json_encoder.dumps(dummy_action_status))
-    res = thaw_objects('/mpcs-practicum/testdata', dummy_action_status)
+    res = thaw_objects(['/mpcs-practicum/testdata/'], dummy_action_status)
 
 
 def test_check_thaw_status():
