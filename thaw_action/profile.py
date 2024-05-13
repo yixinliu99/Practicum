@@ -67,7 +67,7 @@ def thaw_action_run(
     )
     print(action_request.body)#todo del
     print('\n\n\n\n\n')
-    utils.thaw_objects(action_request.body['items'], action_status)
+    utils.thaw_objects(action_request.body['items'], json.dumps(action_status))
     return action_status
 
 # todo status

@@ -4,10 +4,9 @@ from datetime import *
 
 import boto3
 from dateutil.tz import *
-from globus_action_provider_tools import ActionStatusValue
 
-from .model.ThawMetadata import ThawMetadata
-from .model.ThawStatus import ThawStatus
+from thaw_action.model.ThawMetadata import ThawMetadata
+from thaw_action.model.ThawStatus import ThawStatus
 from db_accessor import dynamoAccessor
 
 GLACIER = 'GLACIER'
@@ -22,7 +21,7 @@ GSI_INDEX_NAME = 'action_id-thaw_status-index'
 
 
 def thaw_objects(complete_path, action_status):
-    action_id = action_status.action_id
+    action_id = action_status['action_id']
     s3 = boto3.client('s3')
     dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)
     source_bucket = complete_path.split('/')[1]
@@ -31,8 +30,8 @@ def thaw_objects(complete_path, action_status):
     objects_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, OBJECTS_STATUS_TABLE_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, ACTION_STATUS_TABLE_NAME)
     action_status_accessor.put_item(item={
-        'action_id': action_id,  # todo string
-        'contents': json.loads(action_status)
+        'action_id': {'S': action_id},  # todo string
+        'contents': {'S': json.dumps(action_status)}
     })
 
     paginator = s3.get_paginator('list_objects_v2')
@@ -159,7 +158,7 @@ def is_thaw_in_progress_or_completed(obj):
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
 
 
-def check_thaw_status(action_id: str):
+def check_thaw_status(action_id: str) -> bool or None:
     objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
                                                             OBJECTS_STATUS_TABLE_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
@@ -176,28 +175,10 @@ def check_thaw_status(action_id: str):
         select="COUNT"
     )
     if result['Count'] == 0:
-        action_status = json.loads(action_status['contents']['S'])
-        action_status['status'] = ActionStatusValue.SUCCEEDED
-        action_status['completion_time'] = datetime.now().isoformat()
-        action_status['display_status'] = ActionStatusValue.SUCCEEDED
-        action_status_accessor.update_item(
-            key={
-                'action_id': {"S": action_id},
-            },
-            update_expression="SET #attr_name1 = :attr_value1",
-            expression_attribute_values={':attr_value1': {"S": json.dumps(action_status)}},
-            expression_attribute_names={'#attr_name1': 'contents'}  # todo string
-        )
-
-    return action_status
-
-
-if __name__ == "__main__":
-    dummy_action_status = {
-        "action_id": "1",
-        "status": "ACTIVE",
-        "creator_id": ""
-    }
-    res = thaw_objects('/mpcs-practicum/testdata', '1')
-    # res = check_thaw_status('1')
-    print(res)
+        # action_status = json.loads(action_status['contents']['S'])
+        # action_status['status'] = ActionStatusValue.SUCCEEDED
+        # action_status['completion_time'] = datetime.now().isoformat()
+        # action_status['display_status'] = ActionStatusValue.SUCCEEDED
+        return True
+    else:
+        return False
