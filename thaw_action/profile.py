@@ -19,7 +19,7 @@ from globus_action_provider_tools.flask.types import (
     ActionCallbackReturn,
 )
 
-from thaw_action.utils import get_thaw_status
+from thaw_action.backend import get_thaw_status
 
 thaw_schema = json.load(open('./thaw_action/action_definition/input_schema.json', 'r'))
 auth_scope = "https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all"

@@ -3,7 +3,7 @@ from app import create_app
 
 def test_thaw():
     from globus_action_provider_tools import ActionStatus, ActionStatusValue
-    from thaw_action.utils import thaw_objects
+    from thaw_action.backend import thaw_objects
     from datetime import datetime
     dummy_action_status = {'action_id': 'UWt6fUdVZLZ5', 'completion_time': None,
                            'creator_id': 'urn:globus:auth:identity:cbfba6c9-1a8f-4d42-9041-c73fa6e7d87d', 'details': {},
@@ -23,7 +23,7 @@ def test_thaw():
 
 
 def test_check_thaw_status():
-    from thaw_action.utils import check_thaw_status
+    from thaw_action.backend import check_thaw_status
     res = check_thaw_status('1')
 
 
