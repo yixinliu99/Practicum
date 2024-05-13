@@ -65,7 +65,7 @@ def thaw_objects(complete_path, action_status):
 
     set_s3_notification(source_bucket, keys, s3)
     init_s3_restore(source_bucket, keys, s3)
-    check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
+    check_and_mark_possibly_completed_objects(source_bucket, possibly_completed_objects_key, s3,
                                               objects_status_accessor)
 
     return True
@@ -104,14 +104,14 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
             }
         ]
     }
-
+    # todo retry
     s3_client.put_bucket_notification_configuration(
         Bucket=bucket_name,
         NotificationConfiguration=notification_configuration
     )
 
 
-def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
+def check_and_mark_possibly_completed_objects(bucket_name: str, keys: [str], s3_client: boto3.client,
                                               dynamo_accessor: dynamoAccessor.DynamoAccessor):
     def parse_string(input_string):
         import re
@@ -150,12 +150,13 @@ def is_thaw_in_progress_or_completed(obj):
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
 
 
-def check_thaw_status(action_id: str) -> dict:
+def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
     objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
                                                             OBJECTS_STATUS_TABLE_NAME)
     action_status = get_thaw_status(action_id)
     if not action_status:
-        return None
+        return action_status, None
+
     result = objects_status_accessor.query_items(
         partition_key_expression=f"{ThawMetadata.ACTION_ID} = :{ThawMetadata.ACTION_ID}",
         sort_key_expression=f"{ThawMetadata.THAW_STATUS} = :{ThawMetadata.THAW_STATUS}",
@@ -164,13 +165,10 @@ def check_thaw_status(action_id: str) -> dict:
         index_name=GSI_INDEX_NAME,
         select="COUNT"
     )
-    action_status = json.loads(action_status['contents']['S'])
     if result['Count'] == 0:
-        update_thaw_status(action_id, ThawStatus.COMPLETED)
-        action_status['status'] = ThawStatus.COMPLETED
-        action_status['display_status'] = ThawStatus.COMPLETED
-
-    return action_status
+        return action_status, True
+    else:
+        return action_status, False
 
 
 def get_thaw_status(action_id: str) -> dict:

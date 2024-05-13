@@ -14,10 +14,5 @@ def create_app():
     return app
 
 
-#
-# app = create_app()
-# app.run()
-
-if __name__ == '__main__':
-    from testings import aws_tests
-    aws_tests.test_all()
+app = create_app()
+app.run()

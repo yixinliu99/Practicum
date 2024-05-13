@@ -57,6 +57,7 @@ def thaw_action_run(
     which records information on the instantiated Action and gets stored.
     """
     action_status = ActionStatus(
+        action_id=action_request.request_id,
         status=ActionStatusValue.ACTIVE,
         creator_id=str(auth.effective_identity),
         label=action_request.label or None,
@@ -68,12 +69,10 @@ def thaw_action_run(
         display_status=ActionStatusValue.ACTIVE,
         details={},
     )
-    print(action_request.body)  # todo del
-    print('\n\n\n\n\n')
     json_encoder = current_app.json
-    action_status = json_encoder.loads(json_encoder.dumps(action_status))
-    utils.thaw_objects(action_request.body['items'], action_status)
-    return action_status
+    action_status_dict = json_encoder.loads(json_encoder.dumps(action_status))
+    utils.thaw_objects(action_request.body['items'], action_status_dict)
+    return _dict_to_action_status(action_status_dict)
 
 
 @thaw_aptb.action_status
@@ -83,9 +82,13 @@ def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     ActionStatus. It's possible that some ActionProviders will require querying
     an external system to get up to date information on an Action's status.
     """
-    action_status = utils.check_thaw_status(action_id)
-    if action_status is None:
+    action_status, res = utils.check_thaw_status(action_id)
+    if res is None:
         raise ActionNotFound(f"No action with {action_id}")
+
+    utils.update_thaw_status(action_id, ActionStatusValue.SUCCEEDED)
+    action_status['status'] = ActionStatusValue.SUCCEEDED
+    action_status['display_status'] = ActionStatusValue.SUCCEEDED
     action_status = _dict_to_action_status(action_status)
     authorize_action_access_or_404(action_status, auth)
     return action_status
@@ -121,10 +124,10 @@ def my_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     operation removes the ActionStatus object from the data store. The final, up
     to date ActionStatus is returned after a successful release.
     """
-    action_status = get_thaw_status(action_id)
-    if action_status is None:
+    action_status_dict = get_thaw_status(action_id)
+    if action_status_dict is None:
         raise ActionNotFound(f"No action with {action_id}")
-    action_status = _dict_to_action_status(action_status)
+    action_status = _dict_to_action_status(action_status_dict)
 
     authorize_action_management_or_404(action_status, auth)
     if not action_status.is_complete():
@@ -139,6 +142,7 @@ def my_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn:
 
 def _dict_to_action_status(action_status_dict: dict) -> ActionStatus:
     return ActionStatus(
+        action_id=action_status_dict['action_id'],
         status=action_status_dict['status'],
         creator_id=action_status_dict['creator_id'],
         label=action_status_dict['label'],
