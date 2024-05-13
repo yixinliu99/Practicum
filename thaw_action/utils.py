@@ -164,7 +164,7 @@ def check_thaw_status(action_id: str):
         select="COUNT"
     )
 
-    return result[0]['Count'] == 0
+    return result['Count'] == 0
 
 
 if __name__ == "__main__":

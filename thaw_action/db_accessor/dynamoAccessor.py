@@ -37,14 +37,5 @@ class DynamoAccessor:
             KeyConditionExpression=f"{partition_key_expression} AND {sort_key_expression}",
             ExpressionAttributeValues=key_mapping
         )
-        res.extend(response.get("Items", []))
-        while key := response.get("LastEvaluatedKey"):
-            response = self.client.query(
-                TableName=self.table_name,
-                ExpressionAttributeValues=key_mapping,
-                KeyConditionExpression=f"{partition_key_expression} AND {sort_key_expression}",
-                ExclusiveStartKey=key,
-            )
-            res.extend(response.get("Items", []))
 
-        return res
+        return response
