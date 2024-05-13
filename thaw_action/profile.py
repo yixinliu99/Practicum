@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from thaw_action import utils
 import json
+from flask import current_app
 
 from globus_action_provider_tools import (
     ActionProviderDescription,
@@ -67,7 +68,9 @@ def thaw_action_run(
     )
     print(action_request.body)  # todo del
     print('\n\n\n\n\n')
-    utils.thaw_objects(action_request.body['items'], json.dumps(action_status))
+    json_encoder = current_app.json
+    action_status = json_encoder.loads(json_encoder.dumps(action_status))
+    utils.thaw_objects(action_request.body['items'], action_status)
     return action_status
 
 
