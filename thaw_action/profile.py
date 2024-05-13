@@ -65,12 +65,12 @@ def thaw_action_run(
         display_status=ActionStatusValue.ACTIVE,
         details={},
     )
-    print(action_request.body)#todo del
+    print(action_request.body)  # todo del
     print('\n\n\n\n\n')
     utils.thaw_objects(action_request.body['items'], json.dumps(action_status))
     return action_status
 
-# todo status
+
 @thaw_aptb.action_status
 def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     """

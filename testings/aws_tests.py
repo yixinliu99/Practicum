@@ -14,13 +14,11 @@ def test_thaw():
     json_encoder = app.json
     dummy_action_status = json_encoder.loads(json_encoder.dumps(dummy_action_status))
     res = thaw_objects('/mpcs-practicum/testdata', dummy_action_status)
-    print(res)
 
 
 def test_check_thaw_status():
     from thaw_action.utils import check_thaw_status
     res = check_thaw_status('1')
-    print(res)
 
 
 def test_all():

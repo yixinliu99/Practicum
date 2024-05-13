@@ -1,5 +1,6 @@
 import concurrent
 import json
+import os
 from datetime import *
 
 import boto3
@@ -82,41 +83,31 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
 
 
 def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
-    def set_notification(key):
-        filter_rules = [{
-            'Name': 'prefix',
-            'Value': key,
-        }]
-
-        notification_configuration = {
-            'TopicConfigurations': [
-                {
-                    'TopicArn': SNS_TOPIC_ARN,
-                    'Events': [
-                        's3:ObjectRestore:*'
-                    ],
-                    'Filter': {
-                        "Key": {
-                            'FilterRules': filter_rules
-                        }
+    common_prefix = os.path.commonprefix(keys)
+    filter_rules = [{
+        'Name': 'prefix',
+        'Value': common_prefix,
+    }]
+    notification_configuration = {
+        'TopicConfigurations': [
+            {
+                'TopicArn': SNS_TOPIC_ARN,
+                'Events': [
+                    's3:ObjectRestore:Completed'
+                ],
+                'Filter': {
+                    "Key": {
+                        'FilterRules': filter_rules
                     }
                 }
-            ]
-        }
-        try:
-            response = s3_client.put_bucket_notification_configuration(
-                Bucket=bucket_name,
-                NotificationConfiguration=notification_configuration
-            )
-            print(response)
+            }
+        ]
+    }
 
-        except Exception as e:
-            print(e)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [executor.submit(set_notification, key) for key in keys]
-        for future in concurrent.futures.as_completed(futures):
-            future.result()
+    s3_client.put_bucket_notification_configuration(
+        Bucket=bucket_name,
+        NotificationConfiguration=notification_configuration
+    )
 
 
 def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
