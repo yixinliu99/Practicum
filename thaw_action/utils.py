@@ -150,14 +150,14 @@ def is_thaw_in_progress_or_completed(obj):
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
 
 
-def check_thaw_status(action_id: str) -> bool or None:
+def check_thaw_status(action_id: str):
     objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
                                                             OBJECTS_STATUS_TABLE_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
                                                            ACTION_STATUS_TABLE_NAME)
     action_status = action_status_accessor.get_item(key={"action_id": {"S": action_id}})  # todo string
     if not action_status:
-        return None
+        return action_status, None
     result = objects_status_accessor.query_items(
         partition_key_expression=f"{ThawMetadata.ACTION_ID} = :{ThawMetadata.ACTION_ID}",
         sort_key_expression=f"{ThawMetadata.THAW_STATUS} = :{ThawMetadata.THAW_STATUS}",
@@ -167,10 +167,6 @@ def check_thaw_status(action_id: str) -> bool or None:
         select="COUNT"
     )
     if result['Count'] == 0:
-        # action_status = json.loads(action_status['contents']['S'])
-        # action_status['status'] = ActionStatusValue.SUCCEEDED
-        # action_status['completion_time'] = datetime.now().isoformat()
-        # action_status['display_status'] = ActionStatusValue.SUCCEEDED
-        return True
+        return json.loads(action_status['contents']['S']), True
     else:
-        return False
+        return json.loads(action_status['contents']['S']), False

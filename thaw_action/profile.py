@@ -81,20 +81,24 @@ def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     ActionStatus. It's possible that some ActionProviders will require querying
     an external system to get up to date information on an Action's status.
     """
-    res = utils.check_thaw_status(action_id)
+    action_status, res = utils.check_thaw_status(action_id)
     if res is None:
         raise ActionNotFound(f"No action with {action_id}")
+    if res:
+        status = ActionStatusValue.SUCCEEDED
+    else:
+        status = ActionStatusValue.ACTIVE
     action_status = ActionStatus(
-        status=res['status'],
-        creator_id=res['creator_id'],
-        label=res['label'],
-        monitor_by=res['monitor_by'],
-        manage_by=res['manage_by'],
-        start_time=res['start_time'],
-        completion_time=res['completion_time'],
-        release_after=res['release_after'],
-        display_status=res['display_status'],
-        details=res['details'],
+        status=status,
+        creator_id=action_status['creator_id'],
+        label=action_status['label'],
+        monitor_by=action_status['monitor_by'],
+        manage_by=action_status['manage_by'],
+        start_time=action_status['start_time'],
+        completion_time=action_status['completion_time'],
+        release_after=action_status['release_after'],
+        display_status=action_status['display_status'],
+        details=action_status['details'],
     )
     authorize_action_access_or_404(action_status, auth)
     return action_status
