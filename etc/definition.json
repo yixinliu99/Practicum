@@ -16,12 +16,11 @@
       ],
       "Comment": "Restore archived objects in the source bucket.",
       "WaitTime": 864000,
-      "ActionUrl": "http://3.89.228.129/thaw",
+      "ActionUrl": "https://yixinliu.net/thaw",
       "Parameters": {
         "items.=": "[source.path]",
         "label.=": "getattr('thaw_label', 'Thaw from Source for Move Flow Run with id ' + _context.run_id)",
         "recursive.$": "$.SourceInfo.is_recursive",
-        "bucket_name.$": "$.source.title",
         "endpoint_id.$": "$.source.id"
       },
       "ResultPath": "$.ThawResult",
@@ -119,8 +118,7 @@
       "Parameters": {
         "source_file.=": "SourcePathInfo.details.DATA[0].name",
         "is_recursive.=": "SourcePathInfo.details.DATA[0].is_folder",
-        "source_folder.=": "SourcePathInfo.details.path",
-        "s3_bucket_name.$": "$.source.title"
+        "source_folder.=": "SourcePathInfo.details.path"
       },
       "ResultPath": "$.SourceInfo"
     },

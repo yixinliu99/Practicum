@@ -1,103 +1,61 @@
 {
-  "type": "object",
-  "required": [
-    "source",
-    "destination"
-  ],
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
   "properties": {
-    "source": {
-      "type": "object",
-      "title": "Source",
-      "format": "globus-collection",
-      "required": [
-        "id",
-        "path"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "title": "Source Collection ID",
-          "format": "uuid",
-          "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
-          "maxLength": 36,
-          "minLength": 36,
-          "description": "The UUID for the collection which serves as the source of the Move"
-        },
-        "path": {
-          "type": "string",
-          "title": "Source Collection Path",
-          "description": "The path on the source collection for the data"
-        }
+    "endpoint_id": {
+      "format": "uuid",
+      "maxLength": 36,
+      "minLength": 36,
+      "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
+      "type": "string"
+    },
+    "ignore_missing": {
+      "default": false,
+      "description": "Don't generate errors for nonexistent files and directories.",
+      "type": "boolean"
+    },
+    "interpret_globs": {
+      "default": false,
+      "description": "When set, shell glob characters '*?[]' in the last path component are interpreted as a pattern. This also enables backslash escapes for literal uses of these characters and the backslash character. Like *NIX operating systems, glob characters will not match files or directories that start with '.', and a literal '.' character is required in such cases. The special directories entries '.' and '..' are never matched. Symlinks found during glob expansion are deleted and never followed.",
+      "type": "boolean"
+    },
+    "collection_name": {
+      "maxLength": 64,
+      "minLength": 2,
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "type": "string"
       },
-      "description": "Globus-provided flows require that at least one collection is managed under a subscription.",
-      "propertyOrder": [
-        "id",
-        "path"
-      ],
-      "additionalProperties": false
+      "type": "array"
     },
-    "thaw_label": {
-      "type": "string",
-      "title": "Label for Thaw Task",
-      "pattern": "^[a-zA-Z0-9-_, ]{0,128}$",
+    "label": {
       "maxLength": 128,
-      "minLength": 0,
-      "description": "A label placed on the Transfer operation"
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9-_, ]+$",
+      "type": "string"
     },
-    "destination": {
-      "type": "object",
-      "title": "Destination",
-      "format": "globus-collection",
-      "required": [
-        "id",
-        "path"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "title": "Destination Collection ID",
-          "format": "uuid",
-          "pattern": "[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}",
-          "maxLength": 36,
-          "minLength": 36,
-          "description": "The UUID for the collection which serves as the destination for the Move"
-        },
-        "path": {
-          "type": "string",
-          "title": "Destination Collection Path",
-          "description": "The path on the destination collection where the data will be stored"
-        }
-      },
-      "description": "Globus-provided flows require that at least one collection is managed under a subscription.",
-      "propertyOrder": [
-        "id",
-        "path"
-      ],
-      "additionalProperties": false
+    "notify_on_failed": {
+      "description": "If true and the user has notification enabled, send a notification email when the transfer completes with status FAILED. If unspecified, no value is sent to the Transfer API and the Transfer API will apply its own default.",
+      "type": "boolean"
     },
-    "delete_label": {
-      "type": "string",
-      "title": "Label for Delete Task from Source",
-      "pattern": "^[a-zA-Z0-9-_, ]{0,128}$",
-      "maxLength": 128,
-      "minLength": 0,
-      "description": "A label placed on the Delete operation"
+    "notify_on_inactive": {
+      "description": "If true and the user has notification enabled, send a notification email when the transfer enters status INACTIVE, e.g. from activation credentials expiring. If unspecified, no value is sent to the Transfer API and the Transfer API will apply its own default.",
+      "type": "boolean"
     },
-    "transfer_label": {
-      "type": "string",
-      "title": "Label for Transfer Task",
-      "pattern": "^[a-zA-Z0-9-_, ]{0,128}$",
-      "maxLength": 128,
-      "minLength": 0,
-      "description": "A label placed on the Transfer operation"
+    "notify_on_succeeded": {
+      "description": "If true and the user has notification enabled, send a notification email when the transfer completes with status SUCCEEDED. If unspecified, no value is sent to the Transfer API and the Transfer API will apply its own default.",
+      "type": "boolean"
+    },
+    "recursive": {
+      "default": false,
+      "type": "boolean"
     }
   },
-  "propertyOrder": [
-    "source",
-    "destination",
-    "transfer_label",
-    "delete_label",
-    "thaw_label"
+  "required": [
+    "endpoint_id",
+    "items"
   ],
-  "additionalProperties": false
+  "type": "object"
 }
