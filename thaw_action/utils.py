@@ -4,9 +4,9 @@ from datetime import *
 import boto3
 from dateutil.tz import *
 
-from model.ThawMetadata import ThawMetadata
-from model.ThawStatus import ThawStatus
-from db_accessor import dynamoAccessor
+from .model.ThawMetadata import ThawMetadata
+from .model.ThawStatus import ThawStatus
+from .db_accessor import dynamoAccessor
 
 GLACIER = 'GLACIER'
 DEEP_ARCHIVE = 'DEEP_ARCHIVE'
@@ -15,7 +15,7 @@ ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
 TABLE_NAME = 'MPCS-Practicum-2024'
 REGION_NAME = 'us-east-1'
 SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:074950442422:Practicum-2024'
-GSI_NAME = 'action_id-object_id-index'
+GSI_INDEX_NAME = 'action_id-thaw_status-index'
 
 
 def thaw_objects(complete_path, action_id):
@@ -133,11 +133,13 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
             object_id = bucket_name + "/" + key
             if ongoing_request == 'false':
                 update_expression = "SET #attr_name1 = :attr_value1, #attr_name2 = :attr_value2"
-                expression_attribute_names = {'#attr_name1': 'status', '#attr_name2': 'expiry_time'}
-                expression_attribute_values = {':attr_value1': 'COMPLETED', ':attr_value2': expiry_time}
+                expression_attribute_names = {'#attr_name1': ThawMetadata.THAW_STATUS,
+                                              '#attr_name2': ThawMetadata.EXPIRY_TIME}
+                expression_attribute_values = {':attr_value1': {"S": ThawStatus.COMPLETED},
+                                               ':attr_value2': {"S": expiry_time}}
                 dynamo_accessor.update_item(
                     key={
-                        'object_id': object_id
+                        'object_id': {"S": object_id},
                     },
                     update_expression=update_expression,
                     expression_attribute_values=expression_attribute_values,
@@ -154,10 +156,11 @@ def is_thaw_in_progress_or_completed(obj):
 def check_thaw_status(action_id: str):
     dynamo_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME), TABLE_NAME)
     result = dynamo_accessor.query_items(
-        partition_key_expression="pk = :pk",
-        sort_key_expression="sk = :sk",
-        key_mapping={"pk": {"S": action_id}, "sk": {"S": ThawStatus.INITIATED}},
-        index_name="action_id-status-index",
+        partition_key_expression=f"{ThawMetadata.ACTION_ID} = :{ThawMetadata.ACTION_ID}",
+        sort_key_expression=f"{ThawMetadata.THAW_STATUS} = :{ThawMetadata.THAW_STATUS}",
+        key_mapping={f":{ThawMetadata.ACTION_ID}": {"S": action_id},
+                     f":{ThawMetadata.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
+        index_name=GSI_INDEX_NAME,
         select="COUNT"
     )
 
@@ -165,5 +168,6 @@ def check_thaw_status(action_id: str):
 
 
 if __name__ == "__main__":
-    res = thaw_objects('/mpcs-practicum/testdata', '1')
+    # res = thaw_objects('/mpcs-practicum/testdata', '1')
+    res = check_thaw_status('1')
     print(res)
