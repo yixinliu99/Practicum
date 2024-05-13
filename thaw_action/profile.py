@@ -65,33 +65,33 @@ def thaw_action_run(
         display_status=ActionStatusValue.ACTIVE,
         details={},
     )
-    # print(action_request.body)#todo del
-    # print('\n\n\n\n\n')
-    utils.thaw_objects(action_request.body['items'], action_status.action_id)
+    print(action_request.body)#todo del
+    print('\n\n\n\n\n')
+    utils.thaw_objects(action_request.body['items'], action_status)
     return action_status
 
 # todo status
-# @thaw_aptb.action_status
-# def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
-#     """
-#     Query for the action_id in some storage backend to return the up-to-date
-#     ActionStatus. It's possible that some ActionProviders will require querying
-#     an external system to get up to date information on an Action's status.
-#     """
-#     thaw_succeeded = utils.check_thaw_status(action_id)
-#     action_status = ActionStatus(
-#         status=ActionStatusValue.SUCCEEDED if thaw_succeeded else ActionStatusValue.ACTIVE,
-#         creator_id=str(auth.effective_identity),
-#         label=action_request.label or None,
-#         monitor_by=action_request.monitor_by or auth.identities,
-#         manage_by=action_request.manage_by or auth.identities,
-#         start_time=datetime.now(timezone.utc).isoformat(),
-#         completion_time=None,
-#         release_after=action_request.release_after or "P30D",
-#         display_status=ActionStatusValue.ACTIVE,
-#         details={},
-#     )
-#     if action_status is None:
-#         raise ActionNotFound(f"No action with {action_id}")
-#     authorize_action_access_or_404(action_status, auth)
-#     return action_status
+@thaw_aptb.action_status
+def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+    """
+    Query for the action_id in some storage backend to return the up-to-date
+    ActionStatus. It's possible that some ActionProviders will require querying
+    an external system to get up to date information on an Action's status.
+    """
+    res = utils.check_thaw_status(action_id)
+    if res is None:
+        raise ActionNotFound(f"No action with {action_id}")
+    action_status = ActionStatus(
+        status=res['status'],
+        creator_id=res['creator_id'],
+        label=res['label'],
+        monitor_by=res['monitor_by'],
+        manage_by=res['manage_by'],
+        start_time=res['start_time'],
+        completion_time=res['completion_time'],
+        release_after=res['release_after'],
+        display_status=res['display_status'],
+        details=res['details'],
+    )
+    authorize_action_access_or_404(action_status, auth)
+    return action_status

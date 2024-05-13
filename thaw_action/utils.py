@@ -1,33 +1,39 @@
 import concurrent
+import json
 from datetime import *
 
 import boto3
 from dateutil.tz import *
+from globus_action_provider_tools import ActionStatusValue
 
 from .model.ThawMetadata import ThawMetadata
 from .model.ThawStatus import ThawStatus
-from .db_accessor import dynamoAccessor
+from db_accessor import dynamoAccessor
 
 GLACIER = 'GLACIER'
 DEEP_ARCHIVE = 'DEEP_ARCHIVE'
 INTELLIGENT_TIERING = 'INTELLIGENT_TIERING'
 ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
-TABLE_NAME = 'MPCS-Practicum-2024'
+OBJECTS_STATUS_TABLE_NAME = 'MPCS-Practicum-2024'
+ACTION_STATUS_TABLE_NAME = 'MPCS-Practicum-2024-ActionStatus'
 REGION_NAME = 'us-east-1'
 SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:074950442422:Practicum-2024'
 GSI_INDEX_NAME = 'action_id-thaw_status-index'
 
 
-def thaw_objects(complete_path, action_id):
+def thaw_objects(complete_path, action_status):
+    action_id = action_status.action_id
     s3 = boto3.client('s3')
     dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)
     source_bucket = complete_path.split('/')[1]
     prefix = '/'.join(complete_path.split('/')[2:])
     keys = []
-    dynamo_accessor = dynamoAccessor.DynamoAccessor(dynamodb, TABLE_NAME)
-    print(complete_path)
-    print(source_bucket)
-    print(prefix)
+    objects_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, OBJECTS_STATUS_TABLE_NAME)
+    action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, ACTION_STATUS_TABLE_NAME)
+    action_status_accessor.put_item(item={
+        'action_id': action_id,  # todo string
+        'contents': json.loads(action_status)
+    })
 
     paginator = s3.get_paginator('list_objects_v2')
     pages = paginator.paginate(
@@ -54,12 +60,12 @@ def thaw_objects(complete_path, action_id):
                                         datetime.now().isoformat(),
                                         None)
 
-                dynamo_accessor.put_item(metadata.marshal())
+                objects_status_accessor.put_item(metadata.marshal())
 
     set_s3_notification(source_bucket, keys, s3)
     init_s3_restore(source_bucket, keys, s3)
     check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
-                                              dynamo_accessor)
+                                              objects_status_accessor)
 
     return True
 
@@ -154,8 +160,14 @@ def is_thaw_in_progress_or_completed(obj):
 
 
 def check_thaw_status(action_id: str):
-    dynamo_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME), TABLE_NAME)
-    result = dynamo_accessor.query_items(
+    objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
+                                                            OBJECTS_STATUS_TABLE_NAME)
+    action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
+                                                           ACTION_STATUS_TABLE_NAME)
+    action_status = action_status_accessor.get_item(key={"action_id": {"S": action_id}})  # todo string
+    if not action_status:
+        return None
+    result = objects_status_accessor.query_items(
         partition_key_expression=f"{ThawMetadata.ACTION_ID} = :{ThawMetadata.ACTION_ID}",
         sort_key_expression=f"{ThawMetadata.THAW_STATUS} = :{ThawMetadata.THAW_STATUS}",
         key_mapping={f":{ThawMetadata.ACTION_ID}": {"S": action_id},
@@ -163,11 +175,29 @@ def check_thaw_status(action_id: str):
         index_name=GSI_INDEX_NAME,
         select="COUNT"
     )
+    if result['Count'] == 0:
+        action_status = json.loads(action_status['contents']['S'])
+        action_status['status'] = ActionStatusValue.SUCCEEDED
+        action_status['completion_time'] = datetime.now().isoformat()
+        action_status['display_status'] = ActionStatusValue.SUCCEEDED
+        action_status_accessor.update_item(
+            key={
+                'action_id': {"S": action_id},
+            },
+            update_expression="SET #attr_name1 = :attr_value1",
+            expression_attribute_values={':attr_value1': {"S": json.dumps(action_status)}},
+            expression_attribute_names={'#attr_name1': 'contents'}  # todo string
+        )
 
-    return result['Count'] == 0
+    return action_status
 
 
 if __name__ == "__main__":
-    # res = thaw_objects('/mpcs-practicum/testdata', '1')
-    res = check_thaw_status('1')
+    dummy_action_status = {
+        "action_id": "1",
+        "status": "ACTIVE",
+        "creator_id": ""
+    }
+    res = thaw_objects('/mpcs-practicum/testdata', '1')
+    # res = check_thaw_status('1')
     print(res)
