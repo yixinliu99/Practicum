@@ -18,16 +18,15 @@ from globus_action_provider_tools.flask.types import (
     ActionCallbackReturn,
 )
 
+thaw_schema = json.load(open('./thaw_action/action_definition/input_schema.json', 'r'))
+auth_scope = "https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all"
 
-schema = json.load(open('schema.json', 'r'))
-
-
-description = ActionProviderDescription(
-    globus_auth_scope="https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all",
-    title="Thaw files",
+thaw_description = ActionProviderDescription(
+    globus_auth_scope=auth_scope,
+    title="Thaw Glacier Objects",
     admin_contact="yixinliu@uchicago.edu",
     synchronous=False,
-    input_schema=schema,
+    input_schema=thaw_schema,
     api_version="1.0",
     subtitle="",
     description="",
@@ -37,15 +36,15 @@ description = ActionProviderDescription(
     administered_by=["yixinliu@uchicago.edu"],
 )
 
-aptb = ActionProviderBlueprint(
+thaw_aptb = ActionProviderBlueprint(
     name="apt",
     import_name=__name__,
     url_prefix="/thaw",
-    provider_description=description,
+    provider_description=thaw_description,
 )
 
 
-@aptb.action_run
+@thaw_aptb.action_run
 def thaw_action_run(
         action_request: ActionRequest, auth: AuthState
 ) -> ActionCallbackReturn:
@@ -71,9 +70,8 @@ def thaw_action_run(
     utils.thaw_objects(action_request.body['items'], action_status.action_id)
     return action_status
 
-
 # todo status
-# @aptb.action_status
+# @thaw_aptb.action_status
 # def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
 #     """
 #     Query for the action_id in some storage backend to return the up-to-date
