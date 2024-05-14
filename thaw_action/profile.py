@@ -86,8 +86,8 @@ def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
         update_thaw_status(action_id, ActionStatusValue.SUCCEEDED)
         action_status['status'] = ActionStatusValue.SUCCEEDED
         action_status['display_status'] = ActionStatusValue.SUCCEEDED
-        action_status = _dict_to_action_status(action_status)
 
+    action_status = _dict_to_action_status(action_status)
     authorize_action_access_or_404(action_status, auth)
     return action_status
 
