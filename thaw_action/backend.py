@@ -9,11 +9,8 @@ from thaw_action.model.ThawStatus import ThawStatus
 from db_accessor import dynamoAccessor
 from thaw_action.utils import retry
 from thaw_action.utils import MaximumRetryLimitExceeded
+import thaw_action.model.DataTypes as DataTypes
 
-GLACIER = 'GLACIER'
-DEEP_ARCHIVE = 'DEEP_ARCHIVE'
-INTELLIGENT_TIERING = 'INTELLIGENT_TIERING'
-ARCHIVE_CLASSES = [GLACIER, DEEP_ARCHIVE, INTELLIGENT_TIERING]
 OBJECTS_STATUS_TABLE_NAME = 'MPCS-Practicum-2024'
 ACTION_STATUS_TABLE_NAME = 'MPCS-Practicum-2024-ActionStatus'
 REGION_NAME = 'us-east-1'
@@ -49,7 +46,7 @@ def thaw_objects(complete_path, action_status):
     possibly_completed_objects_key = []
     for page in pages:
         for obj in page['Contents']:
-            if obj['StorageClass'] in ARCHIVE_CLASSES:
+            if obj['StorageClass'] in DataTypes.ARCHIVE_CLASSES:
                 keys.append(obj['Key'])
                 status = ThawStatus.INITIATED
                 if is_thaw_in_progress_or_completed(obj):
@@ -65,7 +62,7 @@ def thaw_objects(complete_path, action_status):
 
     set_s3_notification(source_bucket, keys, s3)
     init_s3_restore(source_bucket, keys, s3)
-    check_and_mark_possibly_completed_objects(source_bucket, possibly_completed_objects_key, s3,
+    check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
                                               objects_status_accessor)
 
     return True
@@ -111,7 +108,7 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
     )
 
 
-def check_and_mark_possibly_completed_objects(bucket_name: str, keys: [str], s3_client: boto3.client,
+def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
                                               dynamo_accessor: dynamoAccessor.DynamoAccessor):
     def parse_string(input_string):
         import re
@@ -130,13 +127,14 @@ def check_and_mark_possibly_completed_objects(bucket_name: str, keys: [str], s3_
             object_id = bucket_name + "/" + key
             if ongoing_request == 'false':
                 update_expression = "SET #attr_name1 = :attr_value1, #attr_name2 = :attr_value2"
-                expression_attribute_names = {'#attr_name1': ThawMetadata.THAW_STATUS,
-                                              '#attr_name2': ThawMetadata.EXPIRY_TIME}
+                expression_attribute_names = {'#attr_name1': DataTypes.THAW_STATUS,
+                                              '#attr_name2': DataTypes.EXPIRY_TIME}
                 expression_attribute_values = {':attr_value1': {"S": ThawStatus.COMPLETED},
                                                ':attr_value2': {"S": expiry_time}}
                 dynamo_accessor.update_item(
                     key={
-                        'object_id': {"S": object_id},
+                        DataTypes.ACTION_ID: {"S": action_id},
+                        DataTypes.OBJECT_ID: {"S": object_id},
                     },
                     update_expression=update_expression,
                     expression_attribute_values=expression_attribute_values,
@@ -158,10 +156,10 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
         return action_status, None
 
     result = objects_status_accessor.query_items(
-        partition_key_expression=f"{ThawMetadata.ACTION_ID} = :{ThawMetadata.ACTION_ID}",
-        sort_key_expression=f"{ThawMetadata.THAW_STATUS} = :{ThawMetadata.THAW_STATUS}",
-        key_mapping={f":{ThawMetadata.ACTION_ID}": {"S": action_id},
-                     f":{ThawMetadata.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
+        partition_key_expression=f"{DataTypes.ACTION_ID} = :{DataTypes.ACTION_ID}",
+        sort_key_expression=f"{DataTypes.THAW_STATUS} = :{DataTypes.THAW_STATUS}",
+        key_mapping={f":{DataTypes.ACTION_ID}": {"S": action_id},
+                     f":{DataTypes.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
         index_name=GSI_INDEX_NAME,
         select="COUNT"
     )
@@ -204,3 +202,6 @@ if __name__ == '__main__':
                            'start_time': '2024-05-13T19:42:06.795219+00:00', 'status': 'ACTIVE'}
     dummy_action_status = json.loads(json.dumps(dummy_action_status))
     res = thaw_objects(['/mpcs-practicum/test00'], dummy_action_status)
+    print(res)
+    js, res = check_thaw_status('UWt6fUdVZLZ5')
+    print(js, res)

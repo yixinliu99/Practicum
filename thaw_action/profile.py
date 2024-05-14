@@ -1,8 +1,6 @@
 from datetime import datetime, timezone
-from thaw_action import utils
 import json
 from flask import current_app
-
 from globus_action_provider_tools import (
     ActionProviderDescription,
     ActionRequest,
@@ -18,8 +16,7 @@ from globus_action_provider_tools.flask.exceptions import ActionNotFound, Action
 from globus_action_provider_tools.flask.types import (
     ActionCallbackReturn,
 )
-
-from thaw_action.backend import get_thaw_status
+from thaw_action.backend import get_thaw_status, thaw_objects, check_thaw_status, update_thaw_status
 
 thaw_schema = json.load(open('./thaw_action/action_definition/input_schema.json', 'r'))
 auth_scope = "https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all"
@@ -71,7 +68,7 @@ def thaw_action_run(
     )
     json_encoder = current_app.json
     action_status_dict = json_encoder.loads(json_encoder.dumps(action_status))
-    utils.thaw_objects(action_request.body['items'], action_status_dict)
+    thaw_objects(action_request.body['items'], action_status_dict)
     return _dict_to_action_status(action_status_dict)
 
 
@@ -82,11 +79,11 @@ def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     ActionStatus. It's possible that some ActionProviders will require querying
     an external system to get up to date information on an Action's status.
     """
-    action_status, res = utils.check_thaw_status(action_id)
+    action_status, res = check_thaw_status(action_id)
     if res is None:
         raise ActionNotFound(f"No action with {action_id}")
 
-    utils.update_thaw_status(action_id, ActionStatusValue.SUCCEEDED)
+    update_thaw_status(action_id, ActionStatusValue.SUCCEEDED)
     action_status['status'] = ActionStatusValue.SUCCEEDED
     action_status['display_status'] = ActionStatusValue.SUCCEEDED
     action_status = _dict_to_action_status(action_status)
@@ -95,7 +92,7 @@ def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
 
 
 @thaw_aptb.action_cancel
-def my_action_cancel(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+def thaw_action_cancel(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     """
     Only Actions that are not in a completed state may be cancelled.
     Cancellations do not necessarily require that an Action's execution be
@@ -113,12 +110,12 @@ def my_action_cancel(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     action_status.status = ActionStatusValue.FAILED
     action_status.display_status = f"Cancelled by {auth.effective_identity}"
     json_encoder = current_app.json
-    utils.update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
+    update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
     return action_status
 
 
 @thaw_aptb.action_release
-def my_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn:
+def thaw_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     """
     Only Actions that are in a completed state may be released. The release
     operation removes the ActionStatus object from the data store. The final, up
@@ -135,7 +132,7 @@ def my_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn:
 
     action_status.display_status = f"Released by {auth.effective_identity}"
     json_encoder = current_app.json
-    utils.update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
+    update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
 
     return action_status
 
