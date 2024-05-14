@@ -19,10 +19,12 @@ def create_app():
 
 def set_env() -> DataTypes:
     vs = {}
-    f = open("./.env", "r")
-    for line in f:
-        vs[line.split("=")[0]] = line.split("=")[1].strip()
-    dt = DataTypes(*vs)
+    with open("./.env", 'r') as file:
+        for line in file:
+            key, value = line.strip().split(' = ')
+            vs[key] = value
+    dt = DataTypes(vs)
+
     return dt
 
 
