@@ -9,27 +9,22 @@ from thaw_action.model.ThawStatus import ThawStatus
 from db_accessor import dynamoAccessor
 from thaw_action.utils import retry
 from thaw_action.utils import MaximumRetryLimitExceeded
-import thaw_action.model.DataTypes as DataTypes
-
-OBJECTS_STATUS_TABLE_NAME = 'MPCS-Practicum-2024'
-ACTION_STATUS_TABLE_NAME = 'MPCS-Practicum-2024-ActionStatus'
-REGION_NAME = 'us-east-1'
-SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:074950442422:Practicum-2024'
-GSI_INDEX_NAME = 'action_id-thaw_status-index'
+from flask import current_app
 
 
 def thaw_objects(complete_path, action_status):
     complete_path = complete_path[0]  # todo: multiple items?
     action_id = action_status['action_id']
     s3 = boto3.client('s3')
-    dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)
+    datatypes = current_app.datatypes
+    dynamodb = boto3.client('dynamodb', region_name=datatypes.REGION_NAME)
     source_bucket = complete_path.split('/')[1]
     prefix = '/'.join(complete_path.split('/')[2:])
     keys = []
-    objects_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, OBJECTS_STATUS_TABLE_NAME)
-    action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, ACTION_STATUS_TABLE_NAME)
+    objects_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.OBJECTS_STATUS_TABLE_NAME)
+    action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.ACTION_STATUS_TABLE_NAME)
     action_status_accessor.put_item(item={
-        'action_id': {'S': action_id},  # todo string
+        datatypes.ACTION_ID: {'S': action_id},
         'contents': {'S': json.dumps(action_status)}
     })
 
@@ -46,7 +41,7 @@ def thaw_objects(complete_path, action_status):
     possibly_completed_objects_key = []
     for page in pages:
         for obj in page['Contents']:
-            if obj['StorageClass'] in DataTypes.ARCHIVE_CLASSES:
+            if obj['StorageClass'] in datatypes.ARCHIVE_CLASSES:
                 keys.append(obj['Key'])
                 status = ThawStatus.INITIATED
                 if is_thaw_in_progress_or_completed(obj):
@@ -83,6 +78,7 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
 @retry(times=3, exceptions=MaximumRetryLimitExceeded)
 def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
     common_prefix = os.path.commonprefix(keys)
+    datatypes = current_app.datatypes
     filter_rules = [{
         'Name': 'prefix',
         'Value': common_prefix,
@@ -90,7 +86,7 @@ def set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
     notification_configuration = {
         'TopicConfigurations': [
             {
-                'TopicArn': SNS_TOPIC_ARN,
+                'TopicArn': datatypes.SNS_TOPIC_ARN,
                 'Events': [
                     's3:ObjectRestore:Completed'
                 ],
@@ -119,6 +115,7 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
         else:
             return None, None
 
+    datatypes = current_app.datatypes
     for key in keys:
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
         if response['Restore']:
@@ -127,14 +124,14 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
             object_id = bucket_name + "/" + key
             if ongoing_request == 'false':
                 update_expression = "SET #attr_name1 = :attr_value1, #attr_name2 = :attr_value2"
-                expression_attribute_names = {'#attr_name1': DataTypes.THAW_STATUS,
-                                              '#attr_name2': DataTypes.EXPIRY_TIME}
+                expression_attribute_names = {'#attr_name1': datatypes.THAW_STATUS,
+                                              '#attr_name2': datatypes.EXPIRY_TIME}
                 expression_attribute_values = {':attr_value1': {"S": ThawStatus.COMPLETED},
                                                ':attr_value2': {"S": expiry_time}}
                 dynamo_accessor.update_item(
                     key={
-                        DataTypes.ACTION_ID: {"S": action_id},
-                        DataTypes.OBJECT_ID: {"S": object_id},
+                        datatypes.ACTION_ID: {"S": action_id},
+                        datatypes.OBJECT_ID: {"S": object_id},
                     },
                     update_expression=update_expression,
                     expression_attribute_values=expression_attribute_values,
@@ -149,18 +146,19 @@ def is_thaw_in_progress_or_completed(obj):
 
 
 def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
-    objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
-                                                            OBJECTS_STATUS_TABLE_NAME)
+    datatypes = current_app.datatypes
+    objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
+                                                            datatypes.OBJECTS_STATUS_TABLE_NAME)
     action_status = get_thaw_status(action_id)
     if not action_status:
         return action_status, None
 
     result = objects_status_accessor.query_items(
-        partition_key_expression=f"{DataTypes.ACTION_ID} = :{DataTypes.ACTION_ID}",
-        sort_key_expression=f"{DataTypes.THAW_STATUS} = :{DataTypes.THAW_STATUS}",
-        key_mapping={f":{DataTypes.ACTION_ID}": {"S": action_id},
-                     f":{DataTypes.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
-        index_name=GSI_INDEX_NAME,
+        partition_key_expression=f"{datatypes.ACTION_ID} = :{datatypes.ACTION_ID}",
+        sort_key_expression=f"{datatypes.THAW_STATUS} = :{datatypes.THAW_STATUS}",
+        key_mapping={f":{datatypes.ACTION_ID}": {"S": action_id},
+                     f":{datatypes.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
+        index_name=datatypes.GSI_INDEX_NAME,
         select="COUNT"
     )
     if result['Count'] == 0:
@@ -170,16 +168,18 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
 
 
 def get_thaw_status(action_id: str) -> dict:
-    action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=REGION_NAME),
-                                                           ACTION_STATUS_TABLE_NAME)
+    datatypes = current_app.datatypes
+    action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
+                                                           datatypes.ACTION_STATUS_TABLE_NAME)
     action_status = action_status_accessor.get_item(key={"action_id": {"S": action_id}})  # todo string
 
     return json.loads(action_status['contents']['S']) if action_status else None
 
 
 def update_thaw_status(action_id: str, thaw_status: str) -> bool:
-    dynamodb = boto3.client('dynamodb', region_name=REGION_NAME)
-    action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, ACTION_STATUS_TABLE_NAME)
+    datatypes = current_app.datatypes
+    dynamodb = boto3.client('dynamodb', region_name=datatypes.REGION_NAME)
+    action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.ACTION_STATUS_TABLE_NAME)
     action_status_accessor.update_item(
         key={
             'action_id': {"S": action_id},

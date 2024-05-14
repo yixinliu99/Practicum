@@ -1,15 +1,10 @@
 from dataclasses import dataclass
 from thaw_action.model.ThawStatus import ThawStatus
+from flask import current_app
 
 
 @dataclass
 class ThawMetadata:
-    THAW_STATUS = 'thaw_status'
-    ACTION_ID = 'action_id'
-    OBJECT_ID = 'object_id'
-    START_TIME = 'start_time'
-    EXPIRY_TIME = 'expiry_time'
-
     action_id: str
     object_id: str
     thaw_status: ThawStatus
@@ -31,12 +26,13 @@ class ThawMetadata:
         self.expiry_time = expiry_time if expiry_time else ''
 
     def marshal(self):
+        datatypes = current_app.datatypes
         res = {
-             self.ACTION_ID: {'S': self.action_id},
-             self.OBJECT_ID: {'S': self.object_id},
-             self.THAW_STATUS: {'S': self.thaw_status},
-             self.START_TIME: {'S': self.start_time},
-             self.EXPIRY_TIME: {'S': self.expiry_time}
+             datatypes.ACTION_ID: {'S': self.action_id},
+             datatypes.OBJECT_ID: {'S': self.object_id},
+             datatypes.THAW_STATUS: {'S': self.thaw_status},
+             datatypes.START_TIME: {'S': self.start_time},
+             datatypes.EXPIRY_TIME: {'S': self.expiry_time}
         }
 
         return res
