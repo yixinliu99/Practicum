@@ -134,8 +134,6 @@ def thaw_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn
 
     cleanup(action_id)
     action_status.display_status = f"Released by {auth.effective_identity}"
-    json_encoder = current_app.json
-    update_action_status(action_id, json_encoder.dumps(action_status))
 
     return action_status
 
