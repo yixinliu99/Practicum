@@ -2,7 +2,7 @@ import concurrent
 import json
 import os
 from datetime import *
-import boto3
+import boto3, botocore
 from dateutil.tz import *
 from thaw_action.model.ThawMetadata import ThawMetadata
 from thaw_action.model.ThawStatus import ThawStatus
@@ -63,13 +63,25 @@ def thaw_objects(complete_path, action_status):
     return True
 
 
+def _initiate_restore(s3_client: boto3.client, bucket_name: str, key: str, days: int):
+    try:
+        s3_client.restore_object(
+            Bucket=bucket_name,
+            Key=key,
+            RestoreRequest={'Days': days})
+    except botocore.exceptions.ClientError as error:
+        if error.response['Error']['Code'] == 'RestoreAlreadyInProgress':
+            pass
+
+
 def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = [executor.submit(
-            s3_client.restore_object,
-            Bucket=source_bucket,
-            Key=key,
-            RestoreRequest={'Days': 1})  # todo: lifecycle policy
+            _initiate_restore,
+            s3_client=s3_client,
+            bucket_name=source_bucket,
+            key=key,
+            days=1)  # todo: lifecycle policy
             for key in keys]
         for future in concurrent.futures.as_completed(futures):
             future.result()
@@ -120,9 +132,9 @@ def check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, 
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
         if response['Restore']:
             ongoing_request, expiry_datetime = parse_string(response['Restore'])
-            expiry_time = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
             object_id = bucket_name + "/" + key
             if ongoing_request == 'false':
+                expiry_time = datetime.strptime(expiry_datetime, "%a, %d %b %Y %H:%M:%S %Z").isoformat()
                 update_expression = "SET #attr_name1 = :attr_value1, #attr_name2 = :attr_value2"
                 expression_attribute_names = {'#attr_name1': datatypes.THAW_STATUS,
                                               '#attr_name2': datatypes.EXPIRY_TIME}
@@ -171,7 +183,7 @@ def get_thaw_status(action_id: str) -> dict:
     datatypes = current_app.datatypes
     action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
                                                            datatypes.ACTION_STATUS_TABLE_NAME)
-    action_status = action_status_accessor.get_item(key={"action_id": {"S": action_id}})  # todo string
+    action_status = action_status_accessor.get_item(key={datatypes.ACTION_ID: {"S": action_id}})
 
     return json.loads(action_status['contents']['S']) if action_status else None
 
