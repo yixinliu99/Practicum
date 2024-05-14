@@ -16,7 +16,7 @@ from globus_action_provider_tools.flask.exceptions import ActionNotFound, Action
 from globus_action_provider_tools.flask.types import (
     ActionCallbackReturn,
 )
-from thaw_action.backend import get_thaw_status, thaw_objects, check_thaw_status, update_thaw_status
+from thaw_action.backend import get_thaw_status, thaw_objects, check_thaw_status, update_thaw_status, cleanup
 
 thaw_schema = json.load(open('./thaw_action/action_definition/input_schema.json', 'r'))
 auth_scope = "https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all"
@@ -131,6 +131,7 @@ def thaw_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn
     if not action_status.is_complete():
         raise ActionConflict("Cannot release incomplete Action")
 
+    cleanup(action_id)
     action_status.display_status = f"Released by {auth.effective_identity}"
     json_encoder = current_app.json
     update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
