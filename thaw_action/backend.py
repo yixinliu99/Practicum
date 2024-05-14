@@ -67,7 +67,7 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
     datatypes = current_app.datatypes
     objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
                                                             datatypes.OBJECTS_STATUS_TABLE_NAME)
-    action_status = get_thaw_status(action_id)
+    action_status = get_action_status(action_id)
     if not action_status:
         return action_status, None
 
@@ -85,7 +85,7 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
         return action_status, False
 
 
-def get_thaw_status(action_id: str) -> dict:
+def get_action_status(action_id: str) -> dict:
     datatypes = current_app.datatypes
     action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
                                                            datatypes.ACTION_STATUS_TABLE_NAME)
@@ -94,7 +94,7 @@ def get_thaw_status(action_id: str) -> dict:
     return json.loads(action_status['contents']['S']) if action_status else None
 
 
-def update_thaw_status(action_id: str, thaw_status: str) -> bool:
+def update_action_status(action_id: str, action_status: str) -> bool:
     datatypes = current_app.datatypes
     dynamodb = boto3.client('dynamodb', region_name=datatypes.REGION_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.ACTION_STATUS_TABLE_NAME)
@@ -103,8 +103,8 @@ def update_thaw_status(action_id: str, thaw_status: str) -> bool:
             'action_id': {"S": action_id},
         },
         update_expression="SET #attr_name = :attr_value",
-        expression_attribute_values={':attr_value': {"S": thaw_status}},
-        expression_attribute_names={'#attr_name': 'status'}
+        expression_attribute_values={':attr_value': {"S": action_status}},
+        expression_attribute_names={'#attr_name': 'contents'}
     )
 
     return True

@@ -16,7 +16,7 @@ from globus_action_provider_tools.flask.exceptions import ActionNotFound, Action
 from globus_action_provider_tools.flask.types import (
     ActionCallbackReturn,
 )
-from thaw_action.backend import get_thaw_status, thaw_objects, check_thaw_status, update_thaw_status, cleanup
+from thaw_action.backend import get_action_status, thaw_objects, check_thaw_status, update_action_status, cleanup
 
 thaw_schema = json.load(open('./thaw_action/action_definition/input_schema.json', 'r'))
 auth_scope = "https://auth.globus.org/scopes/8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45/action_all"
@@ -83,9 +83,10 @@ def thaw_action_status(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     if res is None:
         raise ActionNotFound(f"No action with {action_id}")
     if res:
-        update_thaw_status(action_id, ActionStatusValue.SUCCEEDED)
         action_status['status'] = ActionStatusValue.SUCCEEDED
         action_status['display_status'] = ActionStatusValue.SUCCEEDED
+        json_encoder = current_app.json
+        update_action_status(action_id, json_encoder.dumps(action_status))
 
     action_status = _dict_to_action_status(action_status)
     authorize_action_access_or_404(action_status, auth)
@@ -100,7 +101,7 @@ def thaw_action_cancel(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     stopped. Once cancelled, the ActionStatus object should be updated and
     stored.
     """
-    action_status = get_thaw_status(action_id)
+    action_status = get_action_status(action_id)
     if action_status is None:
         raise ActionNotFound(f"No action with {action_id}")
     action_status = _dict_to_action_status(action_status)
@@ -111,7 +112,7 @@ def thaw_action_cancel(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     action_status.status = ActionStatusValue.FAILED
     action_status.display_status = f"Cancelled by {auth.effective_identity}"
     json_encoder = current_app.json
-    update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
+    update_action_status(action_id, json_encoder.dumps(action_status))
     return action_status
 
 
@@ -122,7 +123,7 @@ def thaw_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn
     operation removes the ActionStatus object from the data store. The final, up
     to date ActionStatus is returned after a successful release.
     """
-    action_status_dict = get_thaw_status(action_id)
+    action_status_dict = get_action_status(action_id)
     if action_status_dict is None:
         raise ActionNotFound(f"No action with {action_id}")
     action_status = _dict_to_action_status(action_status_dict)
@@ -134,7 +135,7 @@ def thaw_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn
     cleanup(action_id)
     action_status.display_status = f"Released by {auth.effective_identity}"
     json_encoder = current_app.json
-    update_thaw_status(action_id, json_encoder.loads(json_encoder.dumps(action_status)))
+    update_action_status(action_id, json_encoder.dumps(action_status))
 
     return action_status
 
