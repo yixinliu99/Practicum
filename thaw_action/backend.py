@@ -81,7 +81,7 @@ def init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
             s3_client=s3_client,
             bucket_name=source_bucket,
             key=key,
-            days=1)  # todo: lifecycle policy
+            days=30)
             for key in keys]
         for future in concurrent.futures.as_completed(futures):
             future.result()
