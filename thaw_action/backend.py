@@ -1,6 +1,5 @@
 import concurrent
 import json
-import os
 from datetime import *
 import boto3, botocore
 from dateutil.tz import *
@@ -9,14 +8,13 @@ from thaw_action.model.ThawStatus import ThawStatus
 from db_accessor import dynamoAccessor
 from thaw_action.utils import retry
 from thaw_action.utils import MaximumRetryLimitExceeded
-from flask import current_app
 
 
 def thaw_objects(complete_path, action_status):
     complete_path = complete_path[0]
     action_id = action_status['action_id']
     s3 = boto3.client('s3')
-    datatypes = current_app.datatypes
+    datatypes = _get_data_types()
     dynamodb = boto3.client('dynamodb', region_name=datatypes.REGION_NAME)
     source_bucket = complete_path.split('/')[1]
     prefix = '/'.join(complete_path.split('/')[2:])
@@ -64,7 +62,7 @@ def thaw_objects(complete_path, action_status):
 
 
 def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
-    datatypes = current_app.datatypes
+    datatypes = _get_data_types()
     objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
                                                             datatypes.OBJECTS_STATUS_TABLE_NAME)
     action_status = get_action_status(action_id)
@@ -86,7 +84,7 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
 
 
 def get_action_status(action_id: str) -> dict:
-    datatypes = current_app.datatypes
+    datatypes = _get_data_types()
     action_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
                                                            datatypes.ACTION_STATUS_TABLE_NAME)
     action_status = action_status_accessor.get_item(key={datatypes.ACTION_ID: {"S": action_id}})
@@ -95,7 +93,7 @@ def get_action_status(action_id: str) -> dict:
 
 
 def update_action_status(action_id: str, action_status: str) -> bool:
-    datatypes = current_app.datatypes
+    datatypes = _get_data_types()
     dynamodb = boto3.client('dynamodb', region_name=datatypes.REGION_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.ACTION_STATUS_TABLE_NAME)
     action_status_accessor.update_item(
@@ -111,7 +109,7 @@ def update_action_status(action_id: str, action_status: str) -> bool:
 
 
 def cleanup(action_id: str):
-    datatypes = current_app.datatypes
+    datatypes = _get_data_types()
     dynamodb = boto3.client('dynamodb', region_name=datatypes.REGION_NAME)
     objects_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.OBJECTS_STATUS_TABLE_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.ACTION_STATUS_TABLE_NAME)
@@ -183,7 +181,7 @@ def _create_s3_notification_policy(SNSArn: str, Events: list):
 
 @retry(times=3, exceptions=MaximumRetryLimitExceeded)
 def _set_s3_notification(bucket_name: str, s3_client: boto3.client):
-    datatypes = current_app.datatypes
+    datatypes = _get_data_types()
     events = ['s3:ObjectRestore:Completed']
     absent_events = []
     config_list, configuration = _get_s3_notification_config(bucket_name, s3_client)
@@ -240,7 +238,7 @@ def _check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str,
         else:
             return None, None
 
-    datatypes = current_app.datatypes
+    datatypes = _get_data_types()
     for key in keys:
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
         if response['Restore']:
@@ -268,6 +266,21 @@ def _is_thaw_in_progress_or_completed(obj):
     return 'RestoreStatus' in obj and ((obj['RestoreStatus']['IsRestoreInProgress']) or
                                        (not obj['RestoreStatus']['IsRestoreInProgress'] and
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
+
+
+def _get_data_types():
+    try:
+        datatypes = _get_data_types()
+    except RuntimeError:
+        from DataTypes import DataTypes
+        vs = {}
+        with open("../.env", 'r') as file:
+            for line in file:
+                key, value = line.strip().split(' = ')
+                vs[key] = value
+        datatypes = DataTypes(vs)
+
+    return datatypes
 
 
 if __name__ == '__main__':
