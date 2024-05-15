@@ -29,7 +29,6 @@ class DynamoAccessor:
 
     def query_items(self, partition_key_expression: str, sort_key_expression: str, key_mapping: Dict[str, Any],
                     index_name: str, select: str):
-        res = []
         response = self.client.query(
             TableName=self.table_name,
             IndexName=index_name,
@@ -39,3 +38,7 @@ class DynamoAccessor:
         )
 
         return response
+
+    def delete_items(self, keys: list[Dict[str, Any]]):
+        for key in keys:
+            self.client.delete_item(TableName=self.table_name, Key=key)
