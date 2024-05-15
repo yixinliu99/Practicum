@@ -173,33 +173,60 @@ def _init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
             future.result()
 
 
-@retry(times=3, exceptions=MaximumRetryLimitExceeded)
-def _set_s3_notification(bucket_name: str, keys: [str], s3_client: boto3.client):
-    common_prefix = os.path.commonprefix(keys)
-    datatypes = current_app.datatypes
-    filter_rules = [{
-        'Name': 'prefix',
-        'Value': common_prefix,
-    }]
-    notification_configuration = {
-        'TopicConfigurations': [
-            {
-                'TopicArn': datatypes.SNS_TOPIC_ARN,
-                'Events': [
-                    's3:ObjectRestore:Completed'
-                ],
-                'Filter': {
-                    "Key": {
-                        'FilterRules': filter_rules
-                    }
-                }
-            }
-        ]
+def _create_s3_notification_policy(SNSArn: str, Events: list):
+    policy = {
+        'TopicArn': SNSArn,
+        'Events': Events,
     }
+    return policy
+
+
+@retry(times=3, exceptions=MaximumRetryLimitExceeded)
+def _set_s3_notification(bucket_name: str, s3_client: boto3.client):
+    datatypes = current_app.datatypes
+    events = ['s3:ObjectRestore:Completed']
+    absent_events = []
+    config_list, configuration = _get_s3_notification_config(bucket_name, s3_client)
+
+    if len(config_list) == 0:
+        policy = _create_s3_notification_policy(datatypes.SNS_TOPIC_ARN, events)
+        event_dict = {'TopicConfigurations': [policy]}
+        _put_s3_notification_configuration(bucket_name, s3_client, event_dict)
+    else:
+        for event in events:
+            if event not in config_list:
+                absent_events.append(event)
+        if len(absent_events) != 0:
+            policy = _create_s3_notification_policy(datatypes.SNS_TOPIC_ARN, events)
+            event_dict = {'TopicConfigurations': [policy]}
+            if 'TopicConfigurations' in configuration.keys():
+                configuration['TopicConfigurations'].extend(event_dict['TopicConfigurations'])
+            else:
+                configuration.update(event_dict)
+            _put_s3_notification_configuration(bucket_name, s3_client, configuration)
+
+
+def _put_s3_notification_configuration(bucket_name: str, s3_client: boto3.client, event_dict: dict):
     s3_client.put_bucket_notification_configuration(
         Bucket=bucket_name,
-        NotificationConfiguration=notification_configuration
+        NotificationConfiguration=event_dict
     )
+
+
+def _get_s3_notification_config(bucket_name: str, s3_client: boto3.client):
+    config_list = []
+    configuration = s3_client.get_bucket_notification_configuration(
+        Bucket=bucket_name,
+    )
+    if len(configuration) != 0:
+        del configuration['ResponseMetadata']
+        for val in configuration.values():
+            if len(val) > 1:
+                for v in val:
+                    config_list.extend(v['Events'])
+            else:
+                config_list.extend(val[0]['Events'])
+    return config_list, configuration
 
 
 def _check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
