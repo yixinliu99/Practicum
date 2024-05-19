@@ -1,4 +1,5 @@
 import boto3
+import json
 
 SQS_EVENT_SOURCE = "aws:sqs"
 S3_EVENT_SOURCE = "aws:s3"
@@ -13,7 +14,7 @@ def get_action_ids(object_id, table):
             ':object_id': object_id
         }
     )
-    print(response)
+
     return [item['action_id'] for item in response.get('Items', [])]
 
 
@@ -23,8 +24,10 @@ def lambda_handler(event, context):
     table_name = 'MPCS-Practicum-2024'
     table = dynamodb.Table(table_name)
 
+    message = json.loads(event['Records'][0]['body'])['Message']
+    message_json = json.loads(message)
     try:
-        for record in event["Records"]:
+        for record in message_json["Records"]:
             if record.get("eventSource") == S3_EVENT_SOURCE:
                 object_key = record['s3']['object']['key']
                 bucket_name = record['s3']['bucket']['name']
