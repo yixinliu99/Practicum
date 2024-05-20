@@ -19,7 +19,7 @@
       "ActionUrl": "https://yixinliu.net/thaw",
       "Parameters": {
         "items.=": "[source.path]",
-        "label.=": "getattr('thaw_label', 'Thaw from Source for Move Flow Run with id ' + _context.run_id)",
+        "label.=": "getattr('thaw_label', 'Thaw from Source with id ' + _context.run_id)",
         "recursive.$": "$.SourceInfo.is_recursive",
         "endpoint_id.$": "$.source.id"
       },
