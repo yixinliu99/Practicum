@@ -31,11 +31,14 @@ class DynamoAccessor:
 
     def query_items(self, partition_key_expression: str, sort_key_expression: str, key_mapping: Dict[str, Any],
                     index_name: str, select: str):
+        key_condition_expression = f"{partition_key_expression}"
+        if sort_key_expression:
+            key_condition_expression += f" AND {sort_key_expression}"
         response = self.client.query(
             TableName=self.table_name,
             IndexName=index_name,
             Select=select,
-            KeyConditionExpression=f"{partition_key_expression} AND {sort_key_expression}",
+            KeyConditionExpression=key_condition_expression,
             ExpressionAttributeValues=key_mapping
         )
 

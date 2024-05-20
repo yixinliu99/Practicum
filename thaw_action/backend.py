@@ -27,6 +27,7 @@ def thaw_objects(complete_path, action_status):
     action_status_accessor.put_item(item={
         datatypes.ACTION_ID: {'S': action_id},
         'contents': {'S': json.dumps(action_status)},
+        'bucket_name': {'S': source_bucket},
         'next_query_time': {'S': (datetime.now() + timedelta(hours=12)).isoformat()}
     })
 
@@ -53,7 +54,7 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
         sort_key_expression=f"{datatypes.THAW_STATUS} = :{datatypes.THAW_STATUS}",
         key_mapping={f":{datatypes.ACTION_ID}": {"S": action_id},
                      f":{datatypes.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
-        index_name=datatypes.GSI_INDEX_NAME,
+        index_name=datatypes.ACTION_STATUS_GSI_INDEX_NAME,
         select="COUNT"
     )
     if result['Count'] == 0:
@@ -80,7 +81,7 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
                 sort_key_expression=f"{datatypes.THAW_STATUS} = :{datatypes.THAW_STATUS}",
                 key_mapping={f":{datatypes.ACTION_ID}": {"S": action_id},
                              f":{datatypes.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
-                index_name=datatypes.GSI_INDEX_NAME,
+                index_name=datatypes.ACTION_STATUS_GSI_INDEX_NAME,
                 select="ALL_PROJECTED_ATTRIBUTES"
             )
             if not uncompleted_objects['Items']:
@@ -127,7 +128,7 @@ def cleanup(action_id: str):
         sort_key_expression=f"{datatypes.THAW_STATUS} = :{datatypes.THAW_STATUS}",
         key_mapping={f":{datatypes.ACTION_ID}": {"S": action_id},
                      f":{datatypes.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
-        index_name=datatypes.GSI_INDEX_NAME,
+        index_name=datatypes.ACTION_STATUS_GSI_INDEX_NAME,
         select="ALL_PROJECTED_ATTRIBUTES"
     )
     completed_objects = objects_status_accessor.query_items(
@@ -135,7 +136,7 @@ def cleanup(action_id: str):
         sort_key_expression=f"{datatypes.THAW_STATUS} = :{datatypes.THAW_STATUS}",
         key_mapping={f":{datatypes.ACTION_ID}": {"S": action_id},
                      f":{datatypes.THAW_STATUS}": {"S": ThawStatus.COMPLETED}},
-        index_name=datatypes.GSI_INDEX_NAME,
+        index_name=datatypes.ACTION_STATUS_GSI_INDEX_NAME,
         select="ALL_PROJECTED_ATTRIBUTES"
     )
     object_ids = []
@@ -271,6 +272,39 @@ def _get_s3_notification_config(bucket_name: str, s3_client: boto3.client):
     return config_list, configuration
 
 
+def _remove_restore_event_sub_from_s3_notification_configuration(bucket_name: str):
+    s3_client = boto3.client('s3')
+    config_list, configuration = _get_s3_notification_config(bucket_name, s3_client)
+    if len(config_list) == 0 or 'TopicConfigurations' not in configuration.keys():
+        return
+
+    for config in configuration['TopicConfigurations']:
+        if (config['TopicArn'] == get_data_types().SNS_TOPIC_ARN and
+                's3:ObjectRestore:Completed' in config['Events'] and
+                not _check_if_s3_bucket_restore_sub_in_use(bucket_name)):
+            configuration['TopicConfigurations'].remove(config)
+            _put_s3_notification_configuration(bucket_name, s3_client, configuration)
+
+
+def _check_if_s3_bucket_restore_sub_in_use(bucket_name: str) -> bool:
+    datatypes = get_data_types()
+    action_status_accessor = dynamoAccessor.DynamoAccessor(
+        boto3.client('dynamodb', region_name=get_data_types().REGION_NAME),
+        get_data_types().ACTION_STATUS_TABLE_NAME)
+
+    result = action_status_accessor.query_items(
+        partition_key_expression=f"{datatypes.BUCKET_NAME} = :{datatypes.BUCKET_NAME}",
+        sort_key_expression="",
+        key_mapping={f":{datatypes.BUCKET_NAME}": {"S": bucket_name}},
+        index_name=datatypes.BUCKET_GSI_INDEX_NAME,
+        select="COUNT"
+    )
+    if result['Count'] == 0:
+        return False
+    else:
+        return True
+
+
 def _check_and_mark_possibly_completed_objects(action_id: str, bucket_name: str, keys: [str], s3_client: boto3.client,
                                                dynamo_accessor: dynamoAccessor.DynamoAccessor):
     def parse_string(input_string):
@@ -321,7 +355,8 @@ if __name__ == '__main__':
                            'release_after': 'P30D',
                            'start_time': '2024-05-13T19:42:06.795219+00:00', 'status': 'ACTIVE'}
     dummy_action_status = json.loads(json.dumps(dummy_action_status))
-    # res = thaw_objects(['/mpcs-practicum'], dummy_action_status)
-    # print(res)
+    res = thaw_objects(['/mpcs-practicum'], dummy_action_status)
+    print(res)
     js, res = check_thaw_status('UWt6fUdVZLZ5')
     print(js, res)
+    _remove_restore_event_sub_from_s3_notification_configuration('mpcs-practicum-archive-2')
