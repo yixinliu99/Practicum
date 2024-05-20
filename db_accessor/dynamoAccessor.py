@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import boto3
 from typing import Any, Dict, Optional
 
@@ -12,6 +13,7 @@ class DynamoAccessor:
         return response.get('Item')
 
     def put_item(self, item: Dict[str, Any], overwrite: bool = False):
+        item = self._add_expiration(item)
         if overwrite:
             self.client.put_item(TableName=self.table_name, Item=item)
         else:
@@ -42,3 +44,10 @@ class DynamoAccessor:
     def delete_items(self, keys: list[Dict[str, Any]]):
         for key in keys:
             self.client.delete_item(TableName=self.table_name, Key=key)
+
+    @staticmethod
+    def _add_expiration(item: Dict[str, Any]) -> Dict[str, Any]:
+        expiration_time = int((datetime.now() + timedelta(days=90)).timestamp())
+        item['item_expiration_time'] = {'N': str(expiration_time)}
+
+        return item
