@@ -86,7 +86,7 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
             if not uncompleted_objects['Items']:
                 return action_status, True
 
-            source_bucket = uncompleted_objects['Items'][0]['object_id']['S'].split('/')[0]
+            source_bucket = '/' + uncompleted_objects['Items'][0]['object_id']['S'].split('/')[0]
             thaw_objects([source_bucket], action_status)
 
         return action_status, False
@@ -321,7 +321,7 @@ if __name__ == '__main__':
                            'release_after': 'P30D',
                            'start_time': '2024-05-13T19:42:06.795219+00:00', 'status': 'ACTIVE'}
     dummy_action_status = json.loads(json.dumps(dummy_action_status))
-    res = thaw_objects(['/mpcs-practicum'], dummy_action_status)
-    print(res)
+    # res = thaw_objects(['/mpcs-practicum'], dummy_action_status)
+    # print(res)
     js, res = check_thaw_status('UWt6fUdVZLZ5')
     print(js, res)
