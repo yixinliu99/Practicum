@@ -18,4 +18,5 @@ class DataTypes:
         self.REGION_NAME = params['REGION_NAME']
         self.SNS_TOPIC_ARN = params['SNS_TOPIC_ARN']
         self.GSI_INDEX_NAME = params['GSI_INDEX_NAME']
+        self.S3_QUERY_INTERVAL = int(params['S3_QUERY_INTERVAL'])
 

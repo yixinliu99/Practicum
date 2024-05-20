@@ -16,44 +16,22 @@ def thaw_objects(complete_path, action_status):
     datatypes = get_data_types()
     dynamodb = boto3.client('dynamodb', region_name=datatypes.REGION_NAME)
     source_bucket = complete_path.split('/')[1]
-    prefix = '/'.join(complete_path.split('/')[2:])
-    keys = []
+    glacier_obj_keys = []
     objects_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.OBJECTS_STATUS_TABLE_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.ACTION_STATUS_TABLE_NAME)
+
+    glacier_obj_keys, possibly_completed_objects_key = _get_s3_objects_and_mark_status(action_id, source_bucket,
+                                                                                       glacier_obj_keys, complete_path,
+                                                                                       s3)
+
     action_status_accessor.put_item(item={
         datatypes.ACTION_ID: {'S': action_id},
-        'contents': {'S': json.dumps(action_status)}
+        'contents': {'S': json.dumps(action_status)},
+        'next_query_time': {'S': (datetime.now() + timedelta(hours=12)).isoformat()}
     })
 
-    paginator = s3.get_paginator('list_objects_v2')
-    pages = paginator.paginate(
-        Bucket=source_bucket,
-        Prefix=prefix,
-        OptionalObjectAttributes=
-        [
-            'RestoreStatus',
-        ]
-    )
-
-    possibly_completed_objects_key = []
-    for page in pages:
-        for obj in page['Contents']:
-            if obj['StorageClass'] in datatypes.ARCHIVE_CLASSES:
-                keys.append(obj['Key'])
-                status = ThawStatus.INITIATED
-                if _is_thaw_in_progress_or_completed(obj):
-                    possibly_completed_objects_key.append(obj['Key'])
-
-                metadata = ThawMetadata(action_id,
-                                        source_bucket + "/" + obj['Key'],
-                                        status,
-                                        datetime.now().isoformat(),
-                                        None)
-
-                objects_status_accessor.put_item(metadata.marshal())
-
     _set_s3_notification(source_bucket, s3)
-    _init_s3_restore(source_bucket, keys, s3)
+    _init_s3_restore(source_bucket, glacier_obj_keys, s3)
     _check_and_mark_possibly_completed_objects(action_id, source_bucket, possibly_completed_objects_key, s3,
                                                objects_status_accessor)
 
@@ -67,6 +45,8 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
     action_status = get_action_status(action_id)
     if not action_status:
         return action_status, None
+    next_query_time = datetime.fromisoformat(action_status['next_query_time']['S'])
+    action_status = json.loads(action_status['contents']['S'])
 
     result = objects_status_accessor.query_items(
         partition_key_expression=f"{datatypes.ACTION_ID} = :{datatypes.ACTION_ID}",
@@ -79,6 +59,36 @@ def check_thaw_status(action_id: str) -> tuple[dict, bool | None]:
     if result['Count'] == 0:
         return action_status, True
     else:
+        if datetime.now() > next_query_time:
+            # update next_query_time
+            next_query_time = (datetime.now() + timedelta(hours=int(datatypes.S3_QUERY_INTERVAL))).isoformat()
+            action_status_accessor = dynamoAccessor.DynamoAccessor(
+                boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
+                datatypes.ACTION_STATUS_TABLE_NAME)
+            action_status_accessor.update_item(
+                key={
+                    'action_id': {"S": action_id},
+                },
+                update_expression="SET #attr_name = :attr_value",
+                expression_attribute_values={':attr_value': {"S": next_query_time}},
+                expression_attribute_names={'#attr_name': 'next_query_time'}
+            )
+
+            # restart thaw for uncompleted objects
+            uncompleted_objects = objects_status_accessor.query_items(
+                partition_key_expression=f"{datatypes.ACTION_ID} = :{datatypes.ACTION_ID}",
+                sort_key_expression=f"{datatypes.THAW_STATUS} = :{datatypes.THAW_STATUS}",
+                key_mapping={f":{datatypes.ACTION_ID}": {"S": action_id},
+                             f":{datatypes.THAW_STATUS}": {"S": ThawStatus.INITIATED}},
+                index_name=datatypes.GSI_INDEX_NAME,
+                select="ALL_PROJECTED_ATTRIBUTES"
+            )
+            if not uncompleted_objects['Items']:
+                return action_status, True
+
+            source_bucket = uncompleted_objects['Items'][0]['object_id']['S'].split('/')[0]
+            thaw_objects([source_bucket], action_status)
+
         return action_status, False
 
 
@@ -88,7 +98,7 @@ def get_action_status(action_id: str) -> dict:
                                                            datatypes.ACTION_STATUS_TABLE_NAME)
     action_status = action_status_accessor.get_item(key={datatypes.ACTION_ID: {"S": action_id}})
 
-    return json.loads(action_status['contents']['S']) if action_status else None
+    return action_status if action_status else None
 
 
 def update_action_status(action_id: str, action_status: str) -> bool:
@@ -168,6 +178,41 @@ def _init_s3_restore(source_bucket: str, keys: list, s3_client: boto3.client):
             for key in keys]
         for future in concurrent.futures.as_completed(futures):
             future.result()
+
+
+def _get_s3_objects_and_mark_status(action_id: str, source_bucket: str, glacier_obj_keys: [str], prefix: str,
+                                    s3: boto3.client) -> tuple[list, list]:
+    datatypes = get_data_types()
+    paginator = s3.get_paginator('list_objects_v2')
+    objects_status_accessor = dynamoAccessor.DynamoAccessor(boto3.client('dynamodb', region_name=datatypes.REGION_NAME),
+                                                            datatypes.OBJECTS_STATUS_TABLE_NAME)
+    pages = paginator.paginate(
+        Bucket=source_bucket,
+        Prefix=prefix,
+        OptionalObjectAttributes=
+        [
+            'RestoreStatus',
+        ]
+    )
+
+    possibly_completed_objects_key = []
+    for page in pages:
+        for obj in page['Contents']:
+            if obj['StorageClass'] in datatypes.ARCHIVE_CLASSES:
+                glacier_obj_keys.append(obj['Key'])
+                status = ThawStatus.INITIATED
+                if _is_thaw_in_progress_or_completed(obj):
+                    possibly_completed_objects_key.append(obj['Key'])
+
+                metadata = ThawMetadata(action_id,
+                                        source_bucket + "/" + obj['Key'],
+                                        status,
+                                        datetime.now().isoformat(),
+                                        None)
+
+                objects_status_accessor.put_item(metadata.marshal())
+
+    return glacier_obj_keys, possibly_completed_objects_key
 
 
 def _create_s3_notification_policy(SNSArn: str, Events: list):
