@@ -19,9 +19,9 @@ def thaw_objects(complete_path, action_status):
     glacier_obj_keys = []
     objects_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.OBJECTS_STATUS_TABLE_NAME)
     action_status_accessor = dynamoAccessor.DynamoAccessor(dynamodb, datatypes.ACTION_STATUS_TABLE_NAME)
-
+    prefix = '/'.join(complete_path.split('/')[2:])
     glacier_obj_keys, possibly_completed_objects_key = _get_s3_objects_and_mark_status(action_id, source_bucket,
-                                                                                       glacier_obj_keys, complete_path,
+                                                                                       glacier_obj_keys, prefix,
                                                                                        s3)
 
     action_status_accessor.put_item(item={
@@ -321,7 +321,7 @@ if __name__ == '__main__':
                            'release_after': 'P30D',
                            'start_time': '2024-05-13T19:42:06.795219+00:00', 'status': 'ACTIVE'}
     dummy_action_status = json.loads(json.dumps(dummy_action_status))
-    res = thaw_objects(['/mpcs-practicum/test00'], dummy_action_status)
+    res = thaw_objects(['/mpcs-practicum'], dummy_action_status)
     print(res)
     js, res = check_thaw_status('UWt6fUdVZLZ5')
     print(js, res)
