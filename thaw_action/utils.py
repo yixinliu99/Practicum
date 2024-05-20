@@ -1,4 +1,3 @@
-
 class MaximumRetryLimitExceeded(Exception):
     def __init__(self, max_retries: int, message: str) -> None:
         self.message = (
@@ -25,3 +24,19 @@ def retry(times, exceptions):
         return newfn
 
     return decorator
+
+
+def get_data_types():
+    try:
+        from flask import current_app
+        datatypes = current_app.datatypes
+    except RuntimeError:
+        from DataTypes import DataTypes
+        vs = {}
+        with open("../.env", 'r') as file:
+            for line in file:
+                key, value = line.strip().split(' = ')
+                vs[key] = value
+        datatypes = DataTypes(vs)
+
+    return datatypes

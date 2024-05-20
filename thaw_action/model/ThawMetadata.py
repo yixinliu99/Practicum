@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from thaw_action.model.ThawStatus import ThawStatus
-from flask import current_app
+from thaw_action.utils import get_data_types
 
 
 @dataclass
@@ -26,13 +26,13 @@ class ThawMetadata:
         self.expiry_time = expiry_time if expiry_time else ''
 
     def marshal(self):
-        datatypes = current_app.datatypes
+        datatypes = get_data_types()
         res = {
-             datatypes.ACTION_ID: {'S': self.action_id},
-             datatypes.OBJECT_ID: {'S': self.object_id},
-             datatypes.THAW_STATUS: {'S': self.thaw_status},
-             datatypes.START_TIME: {'S': self.start_time},
-             datatypes.EXPIRY_TIME: {'S': self.expiry_time}
+            datatypes.ACTION_ID: {'S': self.action_id},
+            datatypes.OBJECT_ID: {'S': self.object_id},
+            datatypes.THAW_STATUS: {'S': self.thaw_status},
+            datatypes.START_TIME: {'S': self.start_time},
+            datatypes.EXPIRY_TIME: {'S': self.expiry_time}
         }
 
         return res
