@@ -104,6 +104,7 @@ def thaw_action_cancel(action_id: str, auth: AuthState) -> ActionCallbackReturn:
     action_status = get_action_status(action_id)
     if action_status is None:
         raise ActionNotFound(f"No action with {action_id}")
+    action_status = json.loads(action_status['contents']['S'])
     action_status = _dict_to_action_status(action_status)
     authorize_action_management_or_404(action_status, auth)
     if action_status.is_complete():
@@ -123,10 +124,11 @@ def thaw_action_release(action_id: str, auth: AuthState) -> ActionCallbackReturn
     operation removes the ActionStatus object from the data store. The final, up
     to date ActionStatus is returned after a successful release.
     """
-    action_status_dict = get_action_status(action_id)
-    if action_status_dict is None:
+    action_status = get_action_status(action_id)
+    if action_status is None:
         raise ActionNotFound(f"No action with {action_id}")
-    action_status = _dict_to_action_status(action_status_dict)
+    action_status = json.loads(action_status['contents']['S'])
+    action_status = _dict_to_action_status(action_status)
 
     authorize_action_management_or_404(action_status, auth)
     if not action_status.is_complete():

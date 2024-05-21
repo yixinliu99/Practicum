@@ -139,6 +139,7 @@ def cleanup(action_id: str):
         index_name=datatypes.ACTION_STATUS_GSI_INDEX_NAME,
         select="ALL_PROJECTED_ATTRIBUTES"
     )
+    bucket_name = action_status_accessor.get_item(key={datatypes.ACTION_ID: {"S": action_id}})['bucket_name']['S']
     object_ids = []
     for obj in initiated_objects['Items']:
         object_ids.append(obj['object_id']['S'])
@@ -155,7 +156,7 @@ def cleanup(action_id: str):
 
     action_status_accessor.delete_items(keys=[{datatypes.ACTION_ID: {"S": action_id}}])
     objects_status_accessor.delete_items(keys=keys)
-    _remove_restore_event_sub_from_s3_notification_configuration(object_ids[0].split('/')[0])
+    _remove_restore_event_sub_from_s3_notification_configuration(bucket_name)
 
 
 def _initiate_restore(s3_client: boto3.client, bucket_name: str, key: str, days: int):
