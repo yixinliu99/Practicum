@@ -17,4 +17,5 @@ class DataTypes:
         self.ACTION_STATUS_GSI_INDEX_NAME = params['ACTION_STATUS_GSI_INDEX_NAME']
         self.BUCKET_GSI_INDEX_NAME = params['BUCKET_GSI_INDEX_NAME']
         self.S3_QUERY_INTERVAL = int(params['S3_QUERY_INTERVAL'])
-
+        self.APT_CLIENT_ID = params['APT_CLIENT_ID']
+        self.APT_CLIENT_SECRET = params['APT_CLIENT_SECRET']

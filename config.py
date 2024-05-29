@@ -1,2 +1,4 @@
-APT_CLIENT_ID = "8e163f0f-2ab9-4898-bb7f-69d6c7e5ac45"
-APT_CLIENT_SECRET = "/I1N0ze5y6IB1gRFuCkwBjALUL8MhGNB7lQb08askNM="
+from flask import current_app
+
+APT_CLIENT_ID = current_app.datatypes.APT_CLIENT_ID
+APT_CLIENT_SECRET = current_app.datatypes.APT_CLIENT_SECRET
