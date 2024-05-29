@@ -1,7 +1,3 @@
-from dataclasses import dataclass
-
-
-@dataclass
 class DataTypes:
     def __init__(self, params):
         self.THAW_STATUS = 'thaw_status'

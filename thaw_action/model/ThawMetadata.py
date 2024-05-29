@@ -1,9 +1,7 @@
-from dataclasses import dataclass
 from thaw_action.model.ThawStatus import ThawStatus
 from thaw_action.utils import get_data_types
 
 
-@dataclass
 class ThawMetadata:
     action_id: str
     object_id: str

@@ -346,19 +346,3 @@ def _is_thaw_in_progress_or_completed(obj):
     return 'RestoreStatus' in obj and ((obj['RestoreStatus']['IsRestoreInProgress']) or
                                        (not obj['RestoreStatus']['IsRestoreInProgress'] and
                                         datetime.now(tzlocal()) < obj['RestoreStatus']['RestoreExpiryDate']))
-
-
-if __name__ == '__main__':
-    dummy_action_status = {'action_id': 'UWt6fUdVZLZ5', 'completion_time': None,
-                           'creator_id': 'urn:globus:auth:identity:cbfba6c9-1a8f-4d42-9041-c73fa6e7d87d', 'details': {},
-                           'display_status': 'ACTIVE', 'label': None,
-                           'manage_by': ['urn:globus:auth:identity:cbfba6c9-1a8f-4d42-9041-c73fa6e7d87d'],
-                           'monitor_by': ['urn:globus:auth:identity:cbfba6c9-1a8f-4d42-9041-c73fa6e7d87d'],
-                           'release_after': 'P30D',
-                           'start_time': '2024-05-13T19:42:06.795219+00:00', 'status': 'ACTIVE'}
-    dummy_action_status = json.loads(json.dumps(dummy_action_status))
-    res = thaw_objects(['/mpcs-practicum'], dummy_action_status)
-    print(res)
-    js, res = check_thaw_status('UWt6fUdVZLZ5')
-    print(js, res)
-    _remove_restore_event_sub_from_s3_notification_configuration('mpcs-practicum-archive-2')
